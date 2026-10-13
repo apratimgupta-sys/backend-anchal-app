@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Anchal.Application.CommissionerMonitoring.Services;
 using Anchal.Domain.CommissionerMonitoring;
 
 namespace Anchal.Infrastructure.CommissionerMonitoring.Persistence;
 
 public sealed partial class CommissionerMonitoringDbContext(DbContextOptions<CommissionerMonitoringDbContext> options)
-    : DbContext(options)
+    : DbContext(options), IMonitoringContext
 {
     public const string Schema = "commissioner_monitoring";
 

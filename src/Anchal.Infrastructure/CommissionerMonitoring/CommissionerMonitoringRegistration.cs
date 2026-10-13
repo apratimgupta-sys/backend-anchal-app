@@ -1,4 +1,5 @@
 using Anchal.Infrastructure.CommissionerMonitoring.Persistence;
+using Anchal.Application.CommissionerMonitoring.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,14 @@ namespace Anchal.Infrastructure.CommissionerMonitoring;
 
 public static class CommissionerMonitoringRegistration
 {
+    public static IServiceCollection AddCommissionerMonitoringWorkflows(this IServiceCollection services)
+    {
+        services.AddScoped<IMonitoringContext>(provider => provider.GetRequiredService<CommissionerMonitoringDbContext>());
+        services.AddScoped<IMonitoringService>(provider => new MonitoringService(
+            provider.GetRequiredService<IMonitoringContext>(), provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        return services;
+    }
+
     public static IServiceCollection AddCommissionerMonitoringPersistence(this IServiceCollection services,
         IConfiguration configuration, IHostEnvironment environment)
     {
