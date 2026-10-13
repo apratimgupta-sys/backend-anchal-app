@@ -7,8 +7,10 @@ RUN dotnet publish src/Anchal.Api/Anchal.Api.csproj --configuration Release --ou
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:8090
 EXPOSE 8090
 
 COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "Anchal.Api.dll"]
+# Render injects its own ASPNETCORE_URLS value, which can bind only loopback.
+# Pass the public container binding as a command-line setting so it wins over
+# that environment value while retaining the local 8090 default.
+ENTRYPOINT ["sh", "-c", "exec dotnet Anchal.Api.dll --urls \"http://0.0.0.0:${PORT:-8090}\""]
