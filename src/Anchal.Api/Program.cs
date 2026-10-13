@@ -2,7 +2,6 @@ using Anchal.Api.CommissionerMonitoring;
 using Anchal.Application.CommissionerMonitoring.Auth;
 using Anchal.Infrastructure.CommissionerMonitoring;
 using Anchal.Infrastructure.CommissionerMonitoring.Auth;
-using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCommissionerMonitoringPersistence(builder.Configuration, builder.Environment);
@@ -12,7 +11,7 @@ builder.Services.AddAuthorization(MonitoringPolicies.AddTo);
 builder.Services.AddControllers();
 builder.Services.AddCommissionerMonitoringApi(builder.Configuration);
 var app = builder.Build();
-app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto });
+app.UseForwardedHeaders(AnchalForwardedHeaders.CreateOptions());
 app.UseCommissionerMonitoringApi();
 app.UseCors(CommissionerMonitoringApiRegistration.CorsPolicy);
 app.UseRateLimiter();

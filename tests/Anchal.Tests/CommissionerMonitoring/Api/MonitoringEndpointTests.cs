@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
@@ -95,6 +96,78 @@ public sealed class MonitoringEndpointTests
         Assert.Equal("RATE_LIMITED", error.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task ForwardedHttpsFromTrustedLoopbackProxySetsSecureCookie()
+    {
+        await using var host = await Host.Create();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login")
+        {
+            Content = new StringContent("{\"username\":\"anchal1\",\"password\":\"Api-contract-password-123!\"}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Origin", AllowedOrigin);
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("secure", response.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+        var options = AnchalForwardedHeaders.CreateOptions();
+        Assert.Contains(System.Net.IPAddress.Loopback, options.KnownProxies);
+    }
+
+    [Fact]
+    public async Task ForwardedHttpsPreservesSameOriginLoginBehavior()
+    {
+        await using var host = await Host.Create();
+        var origin = "https://" + host.Client.BaseAddress!.Authority;
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login")
+        {
+            Content = new StringContent("{\"username\":\"anchal1\",\"password\":\"Api-contract-password-123!\"}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("secure", response.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NonAsciiBodyOverFiftyKilobytesIsRejectedByByteLimit()
+    {
+        await using var host = await Host.Create();
+        var oversized = "{\"username\":\"anchal1\",\"password\":\"" + new string('अ', 20_000) + "\"}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login") { Content = new StringContent(oversized, System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", AllowedOrigin);
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal((HttpStatusCode)413, response.StatusCode);
+        Assert.Equal("VALIDATION", JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task HistoryDoesNotInventRevisionHeaderAndDashboardRejectsInvalidFilters()
+    {
+        await using var host = await Host.Create();
+        using (var login = await host.Login("commissioner")) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        using var history = await host.Client.GetAsync(Root + "/history");
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        Assert.False(history.Headers.Contains("X-Monitoring-Revision"));
+        using var invalid = await host.Client.GetAsync(Root + "/dashboard?officeId=99&serviceId=26");
+        Assert.Equal((HttpStatusCode)422, invalid.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnexpectedMonitoringFailureUsesInternalErrorEnvelope()
+    {
+        await using var host = await Host.Create(throwOnProbe: true);
+        using var response = await host.Client.GetAsync(Root + "/internal-probe");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("INTERNAL", error.GetProperty("code").GetString());
+        Assert.True(error.TryGetProperty("message", out _));
+    }
+
     private sealed class Host(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client => client;
@@ -114,7 +187,7 @@ public sealed class MonitoringEndpointTests
                 .SignInAsync("anchal1", "Api-contract-password-123!");
         }
 
-        public static async Task<Host> Create()
+        public static async Task<Host> Create(bool throwOnProbe = false)
         {
             var builder = WebApplication.CreateBuilder();
             builder.Logging.ClearProviders();
@@ -139,11 +212,14 @@ public sealed class MonitoringEndpointTests
             builder.Services.AddCommissionerMonitoringApi(builder.Configuration);
 
             var app = builder.Build();
+            app.UseForwardedHeaders(AnchalForwardedHeaders.CreateOptions());
             app.UseCommissionerMonitoringApi();
             app.UseCors(CommissionerMonitoringApiRegistration.CorsPolicy);
             app.UseRateLimiter();
             app.UseAuthentication();
             app.UseAuthorization();
+            if (throwOnProbe)
+                app.MapGet(Root + "/internal-probe", (Microsoft.AspNetCore.Http.HttpContext _) => throw new InvalidOperationException("test-only failure"));
             app.MapControllers();
             using (var scope = app.Services.CreateScope())
             {
@@ -155,7 +231,7 @@ public sealed class MonitoringEndpointTests
             }
             await app.StartAsync();
             var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
-            return new(app, new HttpClient { BaseAddress = new Uri(address) });
+            return new(app, new HttpClient(new HttpClientHandler { CookieContainer = new System.Net.CookieContainer() }) { BaseAddress = new Uri(address) });
         }
 
         public async ValueTask DisposeAsync()

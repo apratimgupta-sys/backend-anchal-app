@@ -49,3 +49,23 @@ Focused endpoint verification after the correction:
 ```text
 Passed: 4, Failed: 0
 ```
+
+## Correction round 2
+
+### RED
+
+Added regressions for trusted loopback forwarded HTTPS, secure same-origin login, a non-ASCII request whose UTF-8 byte size exceeds 50 KB, dashboard filter validation, history revision absence, and the internal-error envelope. The first focused run failed because the explicit trusted-proxy policy was absent.
+
+### GREEN
+
+- Added a reusable forwarded-header policy that trusts only IPv4 and IPv6 loopback, with one proxy hop, matching the Nginx-to-Kestrel loopback deployment topology.
+- Wired that policy before the monitoring pipeline.
+- Replaced character-count body limiting with bounded byte-stream reads and byte JSON parsing.
+- Verified forwarded HTTPS produces a `Secure` monitoring session cookie and preserves same-origin login handling.
+
+Focused verification:
+
+```text
+dotnet test tests/Anchal.Tests/Anchal.Tests.csproj --filter FullyQualifiedName~CommissionerMonitoring.Api
+Passed: 9, Failed: 0
+```

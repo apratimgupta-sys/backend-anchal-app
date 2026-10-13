@@ -39,11 +39,10 @@ public sealed class MonitoringHttpAdapter(IMonitoringContext db, TimeProvider cl
     public async Task<PeriodFilter> Filter(IQueryCollection query, CancellationToken ct) { var from = Date(query["from"].ToString(), "from", Today); var to = Date(query["to"].ToString(), "to", from); Guid? office = null; if (query.ContainsKey("officeId")) { if (!int.TryParse(query["officeId"], out var n) || n is < 1 or > 6) throw Validation("officeId", "Select an office"); office = await db.Offices.Where(x => x.Code == "anchal" + n && x.IsActive).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct); if (office is null) throw Validation("officeId", "Select an active office"); } int? service = null; if (query.ContainsKey("serviceId")) { if (!int.TryParse(query["serviceId"], out var n) || n is < 1 or > 25) throw Validation("serviceId", "Select a service"); service = n; } return new(from, to, office, service); }
     public async Task<JsonElement> Body(HttpRequest request, CancellationToken ct)
     {
-        using var reader = new StreamReader(request.Body, leaveOpen: true);
-        var buffer = new char[50_001]; var length = 0;
-        while (length < buffer.Length) { var read = await reader.ReadAsync(buffer.AsMemory(length), ct); if (read == 0) break; length += read; }
+        var buffer = new byte[50_001]; var length = 0;
+        while (length < buffer.Length) { var read = await request.Body.ReadAsync(buffer.AsMemory(length), ct); if (read == 0) break; length += read; }
         if (length > 50_000) throw new MonitoringRuleException(413, new("VALIDATION", "Request too large"));
-        try { using var document = JsonDocument.Parse(new string(buffer, 0, length)); if (document.RootElement.ValueKind != JsonValueKind.Object) throw Validation("body", "Enter an object"); return document.RootElement.Clone(); }
+        try { using var document = JsonDocument.Parse(buffer.AsMemory(0, length)); if (document.RootElement.ValueKind != JsonValueKind.Object) throw Validation("body", "Enter an object"); return document.RootElement.Clone(); }
         catch (JsonException) { throw new MonitoringRuleException(400, new("VALIDATION", "Invalid JSON")); }
     }
     public SetupCommand Setup(JsonElement body) => body.Deserialize<SetupCommand>(Json) ?? throw Validation("body", "Enter an object");
