@@ -23,7 +23,7 @@ public sealed class MonitoringSessionController(IMonitoringService service, IMon
         if (username.ValueKind != JsonValueKind.String || password.ValueKind != JsonValueKind.String) return BadRequest(new { code = "VALIDATION", message = "Enter username and password" });
         var token = await authenticator.SignInAsync(username.GetString()!, password.GetString()!, ct);
         if (token is null) return Unauthorized(new { code = "LOGIN", message = "Invalid username or password" });
-        Response.Cookies.Append(CommissionerMonitoringRouteOptions.CookieName, token, new CookieOptions { HttpOnly = true, Secure = Request.IsHttps, SameSite = SameSiteMode.Strict, Path = CommissionerMonitoringRouteOptions.Prefix, Expires = new JwtSecurityTokenHandler().ReadJwtToken(token).ValidTo, IsEssential = true });
+        Response.Cookies.Append(CommissionerMonitoringRouteOptions.CookieName, token, new CookieOptions { HttpOnly = true, Secure = Request.IsHttps, SameSite = SameSiteMode.None, Path = CommissionerMonitoringRouteOptions.Prefix, Expires = new JwtSecurityTokenHandler().ReadJwtToken(token).ValidTo, IsEssential = true });
         return Ok(new { ok = true });
     }
     [HttpGet("session")] public async Task<IActionResult> Session(CancellationToken ct) => await adapter.Read(Response, await service.GetSessionAsync(User, ct), ct);

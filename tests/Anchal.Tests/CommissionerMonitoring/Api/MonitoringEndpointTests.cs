@@ -46,6 +46,25 @@ public sealed class MonitoringEndpointTests
         Assert.Contains("path=/v1/api/anchal", response.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
     }
 
+    // Break caught: a separately hosted frontend cannot send a Strict cookie back to this API.
+    [Fact]
+    public async Task CrossOriginLoginUsesCrossSiteSessionCookie()
+    {
+        await using var host = await Host.Create();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login")
+        {
+            Content = new StringContent("{\"username\":\"anchal1\",\"password\":\"Api-contract-password-123!\"}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Origin", AllowedOrigin);
+        request.Headers.Add("X-Forwarded-Proto", "https");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("samesite=none", response.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", response.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+    }
+
     // Break caught: an origin not listed in Cors:AllowedOrigins must never receive a credentialed CORS grant.
     [Fact]
     public async Task UnlistedOriginCannotReceiveCredentialedCorsGrantOnLogin()
