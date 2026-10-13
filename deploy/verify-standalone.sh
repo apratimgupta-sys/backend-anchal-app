@@ -81,7 +81,7 @@ for line_number, raw_line in enumerate(environment_path.read_text().splitlines()
         print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
         sys.exit(1)
 
-    if any(character in forbidden_characters for character in value) or (not quoted and ";" in value):
+    if any(character in forbidden_characters for character in value):
         print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
         sys.exit(1)
 

@@ -5,6 +5,32 @@ namespace Anchal.Tests.Deployment;
 
 public sealed class StandaloneVerificationScriptTests
 {
+    // Break caught: deploy executes a protected dotenv file or corrupts the semicolon-delimited
+    // connection string required by Npgsql before handing it to the publish process.
+    [Theory]
+    [InlineData("ConnectionStrings__CommissionerMonitoring=Host=staging;Password=secret-value\n", true)]
+    [InlineData("ConnectionStrings__CommissionerMonitoring=$(touch {MARKER})\n", false)]
+    public void DeployUsesNonEvaluatingDotenvParser(string environmentContents, bool succeeds)
+    {
+        using var fixture = new DeploymentFixture(environmentContents);
+
+        var result = fixture.Run();
+
+        if (succeeds)
+        {
+            Assert.Equal(0, result.ExitCode);
+            Assert.False(File.Exists(fixture.MarkerPath));
+            Assert.Contains("Host=staging;Password=secret-value", fixture.ReadCommandLog(), StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.False(File.Exists(fixture.MarkerPath));
+            Assert.Empty(fixture.ReadCommandLog());
+            Assert.Contains("Invalid Anchal environment file line 1.", result.Output, StringComparison.Ordinal);
+        }
+    }
+
     // Break caught: a staging check applies a database migration without the explicit operator opt-in,
     // or writes a configured secret to its terminal output.
     [Fact]
@@ -38,7 +64,6 @@ public sealed class StandaloneVerificationScriptTests
     [Theory]
     [InlineData("$(touch {MARKER})")]
     [InlineData("`touch {MARKER}`")]
-    [InlineData("Host=staging;touch {MARKER}")]
     public void VerifierRejectsShellSyntaxInEnvironmentValuesWithoutExecutingIt(string maliciousValue)
     {
         using var fixture = new VerificationFixture($"ConnectionStrings__CommissionerMonitoring={maliciousValue}\n");
@@ -140,6 +165,78 @@ public sealed class StandaloneVerificationScriptTests
                 {
                     return candidate;
                 }
+            }
+
+            throw new FileNotFoundException("python3 was not found on the original PATH.");
+        }
+    }
+
+    private sealed class DeploymentFixture : IDisposable
+    {
+        private readonly string _root = FindRepositoryRoot();
+        private readonly string _directory = Path.Combine(Path.GetTempPath(), "anchal-deploy-" + Guid.NewGuid().ToString("N"));
+        private readonly string _originalPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+
+        public DeploymentFixture(string environmentContents)
+        {
+            Directory.CreateDirectory(_directory);
+            Directory.CreateDirectory(Path.Combine(_directory, "bin"));
+            Directory.CreateDirectory(Path.Combine(_directory, "releases"));
+            File.WriteAllText(Path.Combine(_directory, "anchal.env"),
+                environmentContents.Replace("{MARKER}", MarkerPath, StringComparison.Ordinal));
+            File.WriteAllText(Path.Combine(_directory, "command.log"), string.Empty);
+            WriteShim("dotnet", "printf '%s\\n' \"$ConnectionStrings__CommissionerMonitoring\" >> \"$ANCHAL_TEST_COMMAND_LOG\"\n");
+            WriteShim("pm2", "exit 0\n");
+            WriteShim("python3", $"if [ \"${{1:-}}\" = \"deploy/anchal-env.py\" ]; then\n    exec '{FindSystemPython()}' \"$@\"\nfi\nexit 0\n");
+        }
+
+        public string MarkerPath => Path.Combine(_directory, "executed-marker");
+
+        public string ReadCommandLog() => File.ReadAllText(Path.Combine(_directory, "command.log"));
+
+        public (int ExitCode, string Output) Run()
+        {
+            var start = new ProcessStartInfo("sh")
+            {
+                WorkingDirectory = _root,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            start.ArgumentList.Add("deploy/deploy-anchal.sh");
+            start.Environment["ANCHAL_DEPLOY_DIR"] = _directory;
+            start.Environment["ANCHAL_BASE_URL"] = "https://anchal.example";
+            start.Environment["ANCHAL_ENV_FILE"] = Path.Combine(_directory, "anchal.env");
+            start.Environment["ANCHAL_TEST_COMMAND_LOG"] = Path.Combine(_directory, "command.log");
+            start.Environment["PATH"] = Path.Combine(_directory, "bin") + Path.PathSeparator + _originalPath;
+
+            using var process = Process.Start(start)!;
+            process.StandardInput.WriteLine("apply-anchal-migrations");
+            process.StandardInput.Close();
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return (process.ExitCode, output);
+        }
+
+        public void Dispose() => Directory.Delete(_directory, recursive: true);
+
+        private void WriteShim(string name, string body)
+        {
+            var path = Path.Combine(_directory, "bin", name);
+            File.WriteAllText(path, "#!/usr/bin/env sh\nset -eu\n" + body);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        private string FindSystemPython()
+        {
+            foreach (var directory in _originalPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var candidate = Path.Combine(directory, "python3");
+                if (File.Exists(candidate)) return candidate;
             }
 
             throw new FileNotFoundException("python3 was not found on the original PATH.");

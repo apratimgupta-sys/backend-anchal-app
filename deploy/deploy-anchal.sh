@@ -10,14 +10,10 @@ if [ ! -f "$ANCHAL_ENV_FILE" ]; then
     exit 1
 fi
 
-# The protected environment file must contain shell-compatible KEY=value entries.
-set -a
-. "$ANCHAL_ENV_FILE"
-set +a
-
 release_dir="$ANCHAL_DEPLOY_DIR/releases/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$release_dir"
-dotnet publish src/Anchal.Api/Anchal.Api.csproj --configuration Release --output "$release_dir"
+python3 deploy/anchal-env.py --file "$ANCHAL_ENV_FILE" -- \
+    dotnet publish src/Anchal.Api/Anchal.Api.csproj --configuration Release --output "$release_dir"
 
 printf '%s' "Type apply-anchal-migrations to apply only Anchal migrations: "
 read -r confirmation
@@ -26,8 +22,9 @@ if [ "$confirmation" != "apply-anchal-migrations" ]; then
     exit 1
 fi
 
-deploy/apply-migrations.sh
+python3 deploy/anchal-env.py --file "$ANCHAL_ENV_FILE" -- deploy/apply-migrations.sh
 
-export ANCHAL_RELEASE_DIR="$release_dir"
-pm2 startOrReload deploy/ecosystem.anchal.config.cjs --only anchal-api --update-env
-python3 deploy/anchal-smoke.py --base-url "$ANCHAL_BASE_URL" --mode enabled
+python3 deploy/anchal-env.py --file "$ANCHAL_ENV_FILE" --set "ANCHAL_RELEASE_DIR=$release_dir" -- \
+    pm2 startOrReload deploy/ecosystem.anchal.config.cjs --only anchal-api --update-env
+python3 deploy/anchal-env.py --file "$ANCHAL_ENV_FILE" -- \
+    python3 deploy/anchal-smoke.py --base-url "$ANCHAL_BASE_URL" --mode enabled
