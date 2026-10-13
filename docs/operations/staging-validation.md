@@ -7,10 +7,12 @@ changing an Apna Ranchi process, route, database, or configuration.
 
 ## Preconditions
 
-- Use a protected Anchal-only, shell-compatible environment file with
-  independent Supabase credentials. Quote values containing shell punctuation
-  such as a PostgreSQL connection string. Do not echo it, copy it into the
-  terminal, or commit it.
+- Use a protected Anchal-only environment file with independent Supabase
+  credentials. It accepts only restricted `NAME=value` records: no command
+  substitutions, backticks, or shell metacharacters. A value containing a
+  connection-string semicolon must be wrapped in matching single or double
+  quotes; quotes are parsed as delimiters, never evaluated. Do not echo it,
+  copy it into the terminal, or commit it.
 - Confirm `ConnectionStrings__CommissionerMonitoring` names the isolated
   database and that the guardrail values (`CommissionerMonitoring__Expected*`)
   match it.

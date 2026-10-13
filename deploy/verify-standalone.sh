@@ -44,14 +44,58 @@ done
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/anchal-verify.XXXXXX")
 environment_names="$temporary_directory/environment-names"
+environment_entries="$temporary_directory/environment-entries"
 trap 'rm -rf "$temporary_directory"' EXIT HUP INT TERM
 
-# The protected file must contain shell-compatible KEY=value lines. Record only
-# variable names before loading it so values can be removed from child output.
-sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$environment_file" > "$environment_names"
-set -a
-. "$environment_file"
-set +a
+parse_environment_file() {
+    python3 - "$environment_file" "$environment_entries" <<'PY'
+import pathlib
+import re
+import sys
+
+environment_path = pathlib.Path(sys.argv[1])
+destination = pathlib.Path(sys.argv[2])
+name_pattern = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+forbidden_characters = set("&|<>\\`$(){}[]*!~")
+entries = []
+
+for line_number, raw_line in enumerate(environment_path.read_text().splitlines(), start=1):
+    if not raw_line or raw_line.startswith("#"):
+        continue
+    if raw_line != raw_line.strip() or "=" not in raw_line:
+        print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
+        sys.exit(1)
+
+    name, value = raw_line.split("=", 1)
+    if not name_pattern.fullmatch(name):
+        print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
+        sys.exit(1)
+
+    quoted = value[:1] in ("'", '\"')
+    if quoted:
+        if len(value) < 2 or value[-1] != value[0] or value[0] in value[1:-1]:
+            print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
+            sys.exit(1)
+        value = value[1:-1]
+    elif "'" in value or '\"' in value:
+        print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
+        sys.exit(1)
+
+    if any(character in forbidden_characters for character in value) or (not quoted and ";" in value):
+        print(f"Invalid Anchal environment file line {line_number}.", file=sys.stderr)
+        sys.exit(1)
+
+    entries.append((name, value))
+
+destination.write_text("".join(f"{name}={value}\n" for name, value in entries))
+PY
+}
+
+parse_environment_file
+sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$environment_entries" > "$environment_names"
+while IFS= read -r environment_entry; do
+    export "$environment_entry"
+done < "$environment_entries"
 
 redact_output() {
     python3 -c '

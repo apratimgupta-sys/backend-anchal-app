@@ -34,23 +34,59 @@ public sealed class StandaloneVerificationScriptTests
         Assert.DoesNotContain(fixture.Secret, result.Output, StringComparison.Ordinal);
     }
 
+    // Break caught: a protected environment file can execute a command while the verifier reads it.
+    [Theory]
+    [InlineData("$(touch {MARKER})")]
+    [InlineData("`touch {MARKER}`")]
+    [InlineData("Host=staging;touch {MARKER}")]
+    public void VerifierRejectsShellSyntaxInEnvironmentValuesWithoutExecutingIt(string maliciousValue)
+    {
+        using var fixture = new VerificationFixture($"ConnectionStrings__CommissionerMonitoring={maliciousValue}\n");
+
+        var result = fixture.Run();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(fixture.MarkerPath));
+        Assert.Empty(fixture.ReadCommandLog());
+        Assert.Contains("Invalid Anchal environment file line 1.", result.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("not-an-assignment")]
+    [InlineData("INVALID-NAME=value")]
+    [InlineData("ConnectionStrings__CommissionerMonitoring='unterminated")]
+    public void VerifierRejectsMalformedEnvironmentLinesBeforeStartingCommands(string malformedLine)
+    {
+        using var fixture = new VerificationFixture(malformedLine + "\n");
+
+        var result = fixture.Run();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Empty(fixture.ReadCommandLog());
+        Assert.Contains("Invalid Anchal environment file line 1.", result.Output, StringComparison.Ordinal);
+    }
+
     private sealed class VerificationFixture : IDisposable
     {
         private readonly string _root = FindRepositoryRoot();
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "anchal-verify-" + Guid.NewGuid().ToString("N"));
         private readonly string _originalPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
-        public VerificationFixture()
+        public VerificationFixture(string? environmentContents = null)
         {
             Directory.CreateDirectory(_directory);
             Directory.CreateDirectory(Path.Combine(_directory, "bin"));
-            File.WriteAllText(Path.Combine(_directory, "anchal.env"), $"ConnectionStrings__CommissionerMonitoring='{Secret}'\n");
+            File.WriteAllText(
+                Path.Combine(_directory, "anchal.env"),
+                (environmentContents ?? $"ConnectionStrings__CommissionerMonitoring='{Secret}'\n").Replace("{MARKER}", MarkerPath, StringComparison.Ordinal));
             File.WriteAllText(Path.Combine(_directory, "command.log"), string.Empty);
             WriteShim("dotnet", "printf '%s\\n' \"$*\" >> \"$ANCHAL_TEST_COMMAND_LOG\"\nprintf '%s\\n' \"$ConnectionStrings__CommissionerMonitoring\"\n");
-            WriteShim("python3", $"if [ \"${{1:-}}\" = \"-c\" ]; then\n    exec '{FindSystemPython()}' \"$@\"\nfi\nprintf '%s\\n' \"$*\" >> \"$ANCHAL_TEST_COMMAND_LOG\"\nprintf '%s\\n' \"$ConnectionStrings__CommissionerMonitoring\"\n");
+            WriteShim("python3", $"if [ \"${{1:-}}\" = \"-c\" ] || [ \"${{1:-}}\" = \"-\" ]; then\n    exec '{FindSystemPython()}' \"$@\"\nfi\nprintf '%s\\n' \"$*\" >> \"$ANCHAL_TEST_COMMAND_LOG\"\nprintf '%s\\n' \"$ConnectionStrings__CommissionerMonitoring\"\n");
         }
 
         public string Secret => "Host=staging;Password=secret-value";
+
+        public string MarkerPath => Path.Combine(_directory, "executed-marker");
 
         public string ReadCommandLog() => File.ReadAllText(Path.Combine(_directory, "command.log"));
 
