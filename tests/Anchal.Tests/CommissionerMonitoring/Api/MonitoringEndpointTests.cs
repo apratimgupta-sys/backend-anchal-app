@@ -63,9 +63,50 @@ public sealed class MonitoringEndpointTests
         Assert.False(response.Headers.Contains("Access-Control-Allow-Credentials"));
     }
 
+    [Fact]
+    public async Task MalformedLoginJsonUsesValidationEnvelopeAndNoStore()
+    {
+        await using var host = await Host.Create();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login")
+        {
+            Content = new StringContent("{", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Origin", AllowedOrigin);
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+        var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("VALIDATION", error.GetProperty("code").GetString());
+        Assert.True(error.TryGetProperty("message", out _));
+    }
+
+    [Fact]
+    public async Task LoginRateLimitIncludesRetryAfterAndMonitoringEnvelope()
+    {
+        await using var host = await Host.Create();
+        for (var i = 0; i < 10; i++)
+            await host.Login("missing", "wrong");
+        using var response = await host.Login();
+
+        Assert.Equal((HttpStatusCode)429, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
+        var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("RATE_LIMITED", error.GetProperty("code").GetString());
+    }
+
     private sealed class Host(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client => client;
+        public Task<HttpResponseMessage> Login(string username = "anchal1", string password = "Api-contract-password-123!")
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, Root + "/login")
+            {
+                Content = new StringContent($"{{\"username\":\"{username}\",\"password\":\"{password}\"}}", System.Text.Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("Origin", AllowedOrigin);
+            return client.SendAsync(request);
+        }
         public async Task<string?> SignInDirectly()
         {
             using var scope = app.Services.CreateScope();

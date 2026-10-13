@@ -24,6 +24,8 @@ public static class CommissionerMonitoringApiRegistration
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
         services.PostConfigure<RateLimiterOptions>(options => options.OnRejected = async (context, ct) =>
         {
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             await context.HttpContext.Response.WriteAsJsonAsync(new { code = "RATE_LIMITED", message = "Too many attempts. Try again later." }, ct);
         });
@@ -71,6 +73,9 @@ public static class CommissionerMonitoringApiRegistration
         }
         catch (MonitoringRuleException ex) when (!context.Response.HasStarted)
         { context.Response.StatusCode = ex.Status; await context.Response.WriteAsJsonAsync(ex.Error, context.RequestAborted); }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
+        catch (Exception) when (!context.Response.HasStarted)
+        { await WriteError(context.Response, 500, "INTERNAL", "Unable to complete request. Please retry."); }
     });
 
     internal static Task WriteError(HttpResponse response, int status, string code, string message)

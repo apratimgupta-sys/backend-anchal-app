@@ -28,3 +28,24 @@ exit 0
 ```
 
 The test project continues to emit pre-existing NU1510 package-pruning warnings; they do not fail either suite.
+
+## Correction round 1
+
+### RED
+
+Added HTTP contract regressions for malformed login JSON and monitoring login throttling. The focused suite failed as expected:
+
+- malformed JSON returned `500 InternalServerError` rather than `400` with the standard `VALIDATION` envelope;
+- throttling returned `429` without `Retry-After`.
+
+### GREEN
+
+- Restored bounded (50 KB) body parsing with malformed JSON translated to the monitoring validation envelope.
+- Restored `Retry-After` metadata on rejected monitoring rate-limit leases.
+- Restored active-office and service-id filter validation, conditional revision headers, standard internal error envelopes, and forwarded-header middleware for TLS-terminated deployments.
+
+Focused endpoint verification after the correction:
+
+```text
+Passed: 4, Failed: 0
+```
