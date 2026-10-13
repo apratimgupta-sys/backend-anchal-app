@@ -7,17 +7,7 @@ using Anchal.Infrastructure.CommissionerMonitoring.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddCommissionerMonitoringPersistence(builder.Configuration, builder.Environment);
-builder.Services.AddCommissionerMonitoringWorkflows();
-builder.Services.AddMonitoringAuthentication();
-builder.Services.AddAuthorization(MonitoringPolicies.AddTo);
-builder.Services.AddControllers();
-builder.Services.AddCommissionerMonitoringApi(builder.Configuration);
-builder.Services.AddHealthChecks()
-    .AddCheck<CommissionerMonitoringDatabaseHealthCheck>("commissioner-monitoring");
-builder.Services.AddHostedService<AnchalConfigurationValidationService>();
-var app = builder.Build();
+var app = AnchalApplication.Build(args);
 if (args.Length > 0 && args[0] == "provision")
 {
     CommissionerMonitoringConnectionValidator.Validate(app.Configuration, app.Environment.EnvironmentName);
@@ -30,47 +20,59 @@ if (args.Length > 0 && args[0] == "provision")
     Console.WriteLine("Anchal provisioning completed.");
     return;
 }
-app.UseForwardedHeaders(AnchalForwardedHeaders.CreateOptions());
-app.UseCommissionerMonitoringApi();
-app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), monitoring =>
-{
-    monitoring.UseCors(CommissionerMonitoringApiRegistration.CorsPolicy);
-    monitoring.UseRateLimiter();
-    monitoring.UseAuthentication();
-    monitoring.UseAuthorization();
-});
-app.MapControllers();
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    Predicate = _ => false
-});
-app.MapHealthChecks("/health/commissioner-monitoring", new HealthCheckOptions
-{
-    Predicate = check => check.Name == "commissioner-monitoring",
-    ResponseWriter = async (context, report) =>
-    {
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new
-        {
-            status = report.Status == HealthStatus.Healthy ? "healthy" : "unhealthy",
-            service = "anchal"
-        });
-    }
-});
 app.Run();
 
 public partial class Program { }
 
-public sealed class AnchalConfigurationValidationService(IConfiguration configuration, IHostEnvironment environment) : IHostedService
+public static class AnchalApplication
 {
-    public Task StartAsync(CancellationToken cancellationToken)
+    public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
-        CommissionerMonitoringConnectionValidator.Validate(configuration, environment.EnvironmentName);
-        MonitoringAuthenticationRegistration.ValidateConfiguration(configuration);
-        return Task.CompletedTask;
+        var builder = WebApplication.CreateBuilder(args);
+        configure?.Invoke(builder);
+        builder.Services.AddCommissionerMonitoringPersistence(builder.Configuration, builder.Environment);
+        builder.Services.AddCommissionerMonitoringWorkflows();
+        builder.Services.AddMonitoringAuthentication();
+        builder.Services.AddAuthorization(MonitoringPolicies.AddTo);
+        builder.Services.AddControllers();
+        builder.Services.AddCommissionerMonitoringApi(builder.Configuration);
+        builder.Services.AddHealthChecks()
+            .AddCheck<CommissionerMonitoringDatabaseHealthCheck>("commissioner-monitoring");
+
+        CommissionerMonitoringConnectionValidator.Validate(builder.Configuration, builder.Environment.EnvironmentName);
+        MonitoringAuthenticationRegistration.ValidateConfiguration(builder.Configuration);
+
+        var app = builder.Build();
+        app.UseForwardedHeaders(AnchalForwardedHeaders.CreateOptions());
+        app.UseCommissionerMonitoringApi();
+        app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), monitoring =>
+        {
+            monitoring.UseCors(CommissionerMonitoringApiRegistration.CorsPolicy);
+            monitoring.UseRateLimiter();
+            monitoring.UseAuthentication();
+            monitoring.UseAuthorization();
+        });
+        app.MapControllers();
+        app.MapHealthChecks("/health", new HealthCheckOptions
+        {
+            Predicate = _ => false
+        });
+        app.MapHealthChecks("/health/commissioner-monitoring", new HealthCheckOptions
+        {
+            Predicate = check => check.Name == "commissioner-monitoring",
+            ResponseWriter = async (context, report) =>
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    status = report.Status == HealthStatus.Healthy ? "healthy" : "unhealthy",
+                    service = "anchal"
+                });
+            }
+        });
+        return app;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class CommissionerMonitoringDatabaseHealthCheck(IServiceScopeFactory scopeFactory) : IHealthCheck

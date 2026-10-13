@@ -6,7 +6,7 @@ Date: 2026-10-13
 
 - Deployment no longer sources the Anchal dotenv file. `deploy/anchal-env.py` parses a restricted literal `KEY=value` format and launches child commands with those values, so semicolon-delimited PostgreSQL connection strings remain intact without evaluating shell syntax.
 - Public smoke now checks only `/health/anchal` and requires `{ "status": "healthy", "service": "anchal" }`, preventing a different healthy application from satisfying the check.
-- Required database target configuration and JWT secret, issuer, audience, and expiry are validated by a startup hosted service before the HTTP host becomes available. Database connectivity remains exclusively a readiness concern at `/health/commissioner-monitoring` (publicly proxied as `/health/anchal`).
+- Required database target configuration and JWT secret, issuer, audience, and expiry are validated during `Program` application construction immediately before `builder.Build()`. Database connectivity remains exclusively a readiness concern at `/health/commissioner-monitoring` (publicly proxied as `/health/anchal`).
 - `deploy/provision-anchal.sh` is the explicit fresh-database workflow. It runs the isolated migration command first, then starts the local `provision --credentials-file` command, which calls `IMonitoringProvisioner`. It is never invoked from ordinary startup or deploy.
 
 ## Test-first evidence
@@ -15,6 +15,7 @@ Date: 2026-10-13
 - Health/startup regressions failed before implementation for absent service identity and deferred required configuration, then passed.
 - Provisioning credential/workflow tests failed before implementation, then passed.
 - Public smoke routing/identity regression failed before implementation, then passed.
+- Construction-time configuration regression proves invalid DB configuration throws before `builder.Build()` can create a hosted server.
 
 ## Final verification
 
