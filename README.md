@@ -27,3 +27,24 @@ After deployment, run the read-only smoke check against the service URL. It foll
 python3 deploy/anchal-smoke.py --base-url https://anchal.example --mode enabled
 ```
 
+## Isolated PM2 and Nginx deployment
+
+`deploy/deploy-anchal.sh` publishes only this service, pauses for the operator
+to explicitly confirm the independent Commissioner Monitoring migrations, and
+reloads only the `anchal-api` PM2 process on `127.0.0.1:8090`. It requires a
+protected, shell-compatible Anchal-only environment file plus these variables:
+
+```sh
+export ANCHAL_DEPLOY_DIR=/srv/anchal-api
+export ANCHAL_BASE_URL=https://apnaranchi.rsccl.in
+export ANCHAL_ENV_FILE=/etc/anchal-api/anchal.env
+deploy/deploy-anchal.sh
+```
+
+Use `deploy/nginx-anchal.conf.template` only as a narrow include within the
+existing server block, before broader locations. Replace `__ANCHAL_STATIC_ROOT__`
+with the Commissioner frontend's static directory before installation. The
+template owns only `/v1/api/anchal/`, `/health/anchal`, and `/anchal/`; it does
+not replace generic `/api/` or `/` routing. Review [the rollback instructions](deploy/ROLLBACK.md)
+before changing any host configuration.
+

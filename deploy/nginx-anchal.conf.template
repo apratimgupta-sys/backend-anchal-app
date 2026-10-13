@@ -1,0 +1,27 @@
+# Include these locations in the existing server block before any broader API
+# or static-file locations. Replace __ANCHAL_STATIC_ROOT__ before installing.
+
+location /v1/api/anchal/ {
+    proxy_pass http://127.0.0.1:8090;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location /health/anchal {
+    proxy_pass http://127.0.0.1:8090/health/commissioner-monitoring;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location /anchal/ {
+    alias __ANCHAL_STATIC_ROOT__/;
+    try_files $uri $uri/ /anchal/index.html;
+}
