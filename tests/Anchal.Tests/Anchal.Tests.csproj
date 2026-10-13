@@ -7,6 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../src/Anchal.Api/Anchal.Api.csproj" />
     <ProjectReference Include="../../src/Anchal.Domain/Anchal.Domain.csproj" />
     <ProjectReference Include="../../src/Anchal.Infrastructure/Anchal.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
