@@ -27,6 +27,12 @@ After deployment, run the read-only smoke check against the service URL. It foll
 python3 deploy/anchal-smoke.py --base-url https://anchal.example --mode enabled
 ```
 
+For the staged build/test, optional isolated migration, and smoke workflow, use
+the [staging validation runbook](docs/operations/staging-validation.md). The
+verifier requires a protected Anchal environment file, redacts values derived
+from it, runs migrations only when `ALLOW_DATABASE_MIGRATION=true`, and never
+invokes PM2, Nginx, deployment, or Apna Ranchi commands.
+
 ## Isolated PM2 and Nginx deployment
 
 `deploy/deploy-anchal.sh` publishes only this service, pauses for the operator
