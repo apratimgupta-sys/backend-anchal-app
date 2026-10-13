@@ -6,6 +6,23 @@ namespace Anchal.Tests.Architecture;
 public sealed class StandaloneBoundaryTests
 {
     [Fact]
+    public void BoundaryFileSelectionIncludesStandaloneSourceFiles()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var fixturePath = Path.Combine(repositoryRoot, "src", "Anchal.Api", "BoundaryFixture.cs");
+        File.WriteAllText(fixturePath, "using Rmc.Ubpms.Application;");
+
+        try
+        {
+            Assert.Contains(fixturePath, FindBoundaryFiles(repositoryRoot));
+        }
+        finally
+        {
+            File.Delete(fixturePath);
+        }
+    }
+
+    [Fact]
     public void ApiProjectHasStandaloneAssemblyNameAndNoApnaRanchiReferences()
     {
         var repositoryRoot = FindRepositoryRoot();
@@ -20,15 +37,24 @@ public sealed class StandaloneBoundaryTests
                 .Single()
                 .Value);
 
-        var solutionAndProjectFiles = Directory
-            .EnumerateFiles(repositoryRoot, "*.sln", SearchOption.TopDirectoryOnly)
-            .Concat(Directory.EnumerateFiles(repositoryRoot, "*.csproj", SearchOption.AllDirectories));
-
-        foreach (var file in solutionAndProjectFiles)
+        foreach (var file in FindBoundaryFiles(repositoryRoot))
         {
             Assert.DoesNotContain("Rmc.Ubpms", File.ReadAllText(file), StringComparison.Ordinal);
         }
     }
+
+    private static IEnumerable<string> FindBoundaryFiles(string repositoryRoot) =>
+        Directory
+            .EnumerateFiles(repositoryRoot, "*.sln", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.EnumerateFiles(repositoryRoot, "*.csproj", SearchOption.AllDirectories))
+            .Concat(Directory.EnumerateFiles(Path.Combine(repositoryRoot, "src"), "*.cs", SearchOption.AllDirectories))
+            .Where(file =>
+            {
+                var pathSegments = Path.GetRelativePath(repositoryRoot, file)
+                    .Split(Path.DirectorySeparatorChar);
+
+                return !pathSegments.Contains("bin") && !pathSegments.Contains("obj");
+            });
 
     private static string FindRepositoryRoot()
     {
