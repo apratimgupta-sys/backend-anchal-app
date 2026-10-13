@@ -50,6 +50,8 @@ def check(opener, url, token, expected_status):
         raise RuntimeError("health check returned invalid JSON") from None
     if payload.get("status") != "healthy":
         raise RuntimeError("health check did not report healthy")
+    if payload.get("service") != "anchal":
+        raise RuntimeError("health check did not identify the Anchal service")
 
 
 def main():
@@ -60,8 +62,7 @@ def main():
 
     token = os.environ.get("ANCHAL_SMOKE_TOKEN")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    check(opener, health_url(args.base_url, "/health"), token, 200)
-    check(opener, health_url(args.base_url, "/health/commissioner-monitoring"), token, 200)
+    check(opener, health_url(args.base_url, "/health/anchal"), token, 200)
     print("Anchal health checks passed.")
 
 

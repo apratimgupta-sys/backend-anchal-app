@@ -21,6 +21,12 @@ deploy/apply-migrations.sh
 
 `GET /health` is process health and does not require the monitoring database to be resolvable. `GET /health/commissioner-monitoring` checks the dedicated database and returns HTTP 503 with `{ "status": "unhealthy" }` if it cannot be reached or configured safely.
 
+For a fresh isolated database, create a protected credentials file with exactly one 12-128 character password for each of `anchal1` through `anchal6` and `commissioner`, then run the explicit operator command below. It first applies only Anchal migrations and then invokes `IMonitoringProvisioner`; it is never part of ordinary API startup or deployment.
+
+```sh
+deploy/provision-anchal.sh --env-file /etc/anchal-api/anchal.env --credentials-file /etc/anchal-api/anchal-provisioning.env
+```
+
 After deployment, run the read-only smoke check against the service URL. It follows no redirects, disables proxy use, rejects URLs with credentials, and accepts an optional bearer token only through `ANCHAL_SMOKE_TOKEN`.
 
 ```sh
@@ -38,7 +44,7 @@ invokes PM2, Nginx, deployment, or Apna Ranchi commands.
 `deploy/deploy-anchal.sh` publishes only this service, pauses for the operator
 to explicitly confirm the independent Commissioner Monitoring migrations, and
 reloads only the `anchal-api` PM2 process on `127.0.0.1:8090`. It requires a
-protected, shell-compatible Anchal-only environment file plus these variables:
+protected Anchal-only dotenv file parsed without shell evaluation plus these variables:
 
 ```sh
 export ANCHAL_DEPLOY_DIR=/srv/anchal-api

@@ -1,4 +1,5 @@
 using Anchal.Api.CommissionerMonitoring;
+using Anchal.Api.Provisioning;
 using Anchal.Application.CommissionerMonitoring.Auth;
 using Anchal.Infrastructure.CommissionerMonitoring;
 using Anchal.Infrastructure.CommissionerMonitoring.Auth;
@@ -15,7 +16,20 @@ builder.Services.AddControllers();
 builder.Services.AddCommissionerMonitoringApi(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddCheck<CommissionerMonitoringDatabaseHealthCheck>("commissioner-monitoring");
+builder.Services.AddHostedService<AnchalConfigurationValidationService>();
 var app = builder.Build();
+if (args.Length > 0 && args[0] == "provision")
+{
+    CommissionerMonitoringConnectionValidator.Validate(app.Configuration, app.Environment.EnvironmentName);
+    MonitoringAuthenticationRegistration.ValidateConfiguration(app.Configuration);
+    if (args.Length != 3 || args[1] != "--credentials-file")
+        throw new InvalidOperationException("Usage: provision --credentials-file /protected/anchal-provisioning.env");
+    await using var scope = app.Services.CreateAsyncScope();
+    var credentials = AnchalProvisioningCredentials.Read(args[2]);
+    await scope.ServiceProvider.GetRequiredService<IMonitoringProvisioner>().ProvisionAsync(credentials);
+    Console.WriteLine("Anchal provisioning completed.");
+    return;
+}
 app.UseForwardedHeaders(AnchalForwardedHeaders.CreateOptions());
 app.UseCommissionerMonitoringApi();
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), monitoring =>
@@ -38,13 +52,26 @@ app.MapHealthChecks("/health/commissioner-monitoring", new HealthCheckOptions
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new
         {
-            status = report.Status == HealthStatus.Healthy ? "healthy" : "unhealthy"
+            status = report.Status == HealthStatus.Healthy ? "healthy" : "unhealthy",
+            service = "anchal"
         });
     }
 });
 app.Run();
 
 public partial class Program { }
+
+public sealed class AnchalConfigurationValidationService(IConfiguration configuration, IHostEnvironment environment) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        CommissionerMonitoringConnectionValidator.Validate(configuration, environment.EnvironmentName);
+        MonitoringAuthenticationRegistration.ValidateConfiguration(configuration);
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
 
 public sealed class CommissionerMonitoringDatabaseHealthCheck(IServiceScopeFactory scopeFactory) : IHealthCheck
 {
