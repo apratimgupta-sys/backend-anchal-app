@@ -11,6 +11,17 @@ namespace Anchal.Infrastructure.CommissionerMonitoring.Auth;
 
 public static class MonitoringAuthenticationRegistration
 {
+    public static void ValidateConfiguration(IConfiguration configuration)
+    {
+        var secret = Required(configuration, "Secret");
+        if (Encoding.UTF8.GetByteCount(secret) < 32)
+            throw new InvalidOperationException("Anchal:Jwt:Secret must be at least 32 bytes.");
+        _ = Required(configuration, "Issuer");
+        _ = Required(configuration, "Audience");
+        if (!int.TryParse(configuration["Anchal:Jwt:ExpiryMinutes"], out var minutes) || minutes is < 1 or > 1440)
+            throw new InvalidOperationException("Anchal:Jwt:ExpiryMinutes must be between 1 and 1440.");
+    }
+
     public static IServiceCollection AddMonitoringAuthentication(this IServiceCollection services)
     {
         services.AddAuthentication()
@@ -38,7 +49,7 @@ public static class MonitoringAuthenticationRegistration
         return services;
     }
 
-    private static string Required(IConfiguration configuration, string key) =>
+    internal static string Required(IConfiguration configuration, string key) =>
         configuration[$"Anchal:Jwt:{key}"] is { Length: > 0 } value
             ? value
             : throw new InvalidOperationException($"Anchal:Jwt:{key} is required.");
