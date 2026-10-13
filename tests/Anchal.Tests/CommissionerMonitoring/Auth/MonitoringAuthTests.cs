@@ -2,7 +2,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Xunit;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +30,7 @@ public sealed class MonitoringAuthTests
         var auth = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
         var db = scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>();
         var token = await account.SignInAsync("anchal1", Password);
-        var principal = Validate(token!);
+        var principal = (await AuthenticateAsync(provider, token!)).Principal!;
         var ownOffice = await db.Offices.SingleAsync(x => x.Code == "anchal1");
         var otherOffice = await db.Offices.SingleAsync(x => x.Code == "anchal2");
 
@@ -45,7 +47,8 @@ public sealed class MonitoringAuthTests
         using var scope = provider.CreateScope();
         var account = scope.ServiceProvider.GetRequiredService<IMonitoringAuthenticator>();
         var auth = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
-        var principal = Validate((await account.SignInAsync("commissioner", Password))!);
+        var principal = (await AuthenticateAsync(provider,
+            (await account.SignInAsync("commissioner", Password))!)).Principal!;
 
         Assert.True((await auth.AuthorizeAsync(principal, MonitoringPolicies.Commissioner)).Succeeded);
         Assert.False((await auth.AuthorizeAsync(principal, MonitoringPolicies.Office)).Succeeded);
@@ -73,7 +76,8 @@ public sealed class MonitoringAuthTests
         var account = scope.ServiceProvider.GetRequiredService<IMonitoringAuthenticator>();
         var auth = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
         var db = scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>();
-        var principal = Validate((await account.SignInAsync("anchal1", Password))!);
+        var principal = (await AuthenticateAsync(provider,
+            (await account.SignInAsync("anchal1", Password))!)).Principal!;
         var assignment = await db.UserOffices.Include(x => x.User)
             .SingleAsync(x => x.User.LoginName == "anchal1");
         db.UserOffices.Remove(assignment);
@@ -93,12 +97,13 @@ public sealed class MonitoringAuthTests
         var token = (await account.SignInAsync("anchal1", Password))!;
         var segments = token.Split('.');
         segments[2] = segments[2][0] == 'a' ? "b" + segments[2][1..] : "a" + segments[2][1..];
-        Assert.ThrowsAny<SecurityTokenException>(() => Validate(string.Join('.', segments)));
+        Assert.False((await AuthenticateAsync(provider, string.Join('.', segments))).Succeeded);
     }
 
     [Fact]
     public async Task ForeignIssuerOrAudienceTokenCannotAuthorizeAnchal()
     {
+        await using var provider = Services();
         var claims = new[] { new Claim(MonitoringPolicies.ScopeClaim, MonitoringPolicies.ScopeValue) };
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)), SecurityAlgorithms.HmacSha256);
@@ -108,7 +113,8 @@ public sealed class MonitoringAuthTests
         {
             var token = new JwtSecurityToken(issuer, audience, claims,
                 expires: DateTime.UtcNow.AddMinutes(5), signingCredentials: credentials);
-            Assert.ThrowsAny<SecurityTokenException>(() => Validate(new JwtSecurityTokenHandler().WriteToken(token)));
+            Assert.False((await AuthenticateAsync(provider,
+                new JwtSecurityTokenHandler().WriteToken(token))).Succeeded);
         }
     }
 
@@ -195,14 +201,12 @@ public sealed class MonitoringAuthTests
         new[] { "anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner" }
             .ToDictionary(x => x, _ => password);
 
-    private static ClaimsPrincipal Validate(string token) => new JwtSecurityTokenHandler().ValidateToken(token,
-        new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
-            ValidateIssuer = true, ValidIssuer = "anchal-api",
-            ValidateAudience = true, ValidAudience = "anchal-client",
-            ValidateLifetime = true, ClockSkew = TimeSpan.Zero
-        }, out _);
+    private static Task<AuthenticateResult> AuthenticateAsync(ServiceProvider provider, string token)
+    {
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Request.Headers.Authorization = $"Bearer {token}";
+        return provider.GetRequiredService<IAuthenticationService>()
+            .AuthenticateAsync(context, MonitoringPolicies.AuthenticationScheme);
+    }
 
 }
