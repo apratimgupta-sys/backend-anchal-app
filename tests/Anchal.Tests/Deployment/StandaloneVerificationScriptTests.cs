@@ -104,6 +104,16 @@ public sealed class StandaloneVerificationScriptTests
         Assert.DoesNotContain("unterminated-secret-value", result.Output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void MigrationStartupProjectReferencesEntityFrameworkDesignTools()
+    {
+        var projectFile = Path.Combine(FindRepositoryRoot(), "src", "Anchal.Api", "Anchal.Api.csproj");
+
+        var project = File.ReadAllText(projectFile);
+
+        Assert.Contains("PackageReference Include=\"Microsoft.EntityFrameworkCore.Design\"", project, StringComparison.Ordinal);
+    }
+
     private sealed class VerificationFixture : IDisposable
     {
         private readonly string _root = FindRepositoryRoot();
