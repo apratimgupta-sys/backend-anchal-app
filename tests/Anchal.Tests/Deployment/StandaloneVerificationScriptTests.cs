@@ -91,6 +91,19 @@ public sealed class StandaloneVerificationScriptTests
         Assert.Contains("Invalid Anchal environment file line 1.", result.Output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void EnvironmentDiagnosticReportsTheRuleAndNeverTheConfiguredValue()
+    {
+        using var fixture = new EnvironmentDiagnosticFixture(
+            "ConnectionStrings__CommissionerMonitoring='unterminated-secret-value\n");
+
+        var result = fixture.Run();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("line 1: unterminated quoted value for ConnectionStrings__CommissionerMonitoring", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("unterminated-secret-value", result.Output, StringComparison.Ordinal);
+    }
+
     private sealed class VerificationFixture : IDisposable
     {
         private readonly string _root = FindRepositoryRoot();
@@ -241,6 +254,39 @@ public sealed class StandaloneVerificationScriptTests
 
             throw new FileNotFoundException("python3 was not found on the original PATH.");
         }
+    }
+
+    private sealed class EnvironmentDiagnosticFixture : IDisposable
+    {
+        private readonly string _root = FindRepositoryRoot();
+        private readonly string _directory = Path.Combine(Path.GetTempPath(), "anchal-env-diagnostic-" + Guid.NewGuid().ToString("N"));
+
+        public EnvironmentDiagnosticFixture(string environmentContents)
+        {
+            Directory.CreateDirectory(_directory);
+            File.WriteAllText(Path.Combine(_directory, "anchal.env"), environmentContents);
+        }
+
+        public (int ExitCode, string Output) Run()
+        {
+            var start = new ProcessStartInfo("python3")
+            {
+                WorkingDirectory = _root,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            start.ArgumentList.Add("deploy/diagnose-anchal-env.py");
+            start.ArgumentList.Add("--file");
+            start.ArgumentList.Add(Path.Combine(_directory, "anchal.env"));
+
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return (process.ExitCode, output);
+        }
+
+        public void Dispose() => Directory.Delete(_directory, recursive: true);
     }
 
     private static string FindRepositoryRoot()
