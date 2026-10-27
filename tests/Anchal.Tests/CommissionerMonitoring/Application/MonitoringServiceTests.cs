@@ -279,30 +279,46 @@ public sealed class MonitoringServiceTests
     }
 
     [Fact]
-    public async Task HistoricalChangeRejectsLaterNegativeAndRecomputesValidLaterClosings()
+    public async Task HistoricalCorrectionRecomputesLaterClosings()
     {
         await using var f = await Fixture.Create();
         await f.Setup();
         var first = Save(new(2026, 10, 1), "backdate", "Late") with {
-            Input = Input(new(2026, 10, 1)) with { Received = 2, Completed = 4, AvgDisposalDays = 2 } };
+            Input = Input(new(2026, 10, 1)) with { Received = 4, Completed = 1, AvgDisposalDays = 2 } };
         var original = (await f.Service.SaveEntryAsync(f.Principal, first)).Value!;
         var later = Save(new(2026, 10, 3), "backdate", "Late") with { RequestId = "later-entry",
-            Input = Input(new(2026, 10, 3)) with { Completed = 8, AvgDisposalDays = 2 } };
+            Input = Input(new(2026, 10, 3)) with { Received = 2, Completed = 2, AvgDisposalDays = 2 } };
         Assert.True((await f.Service.SaveEntryAsync(f.Principal, later)).IsSuccess);
         var correction = first with { RequestId = "correct-first", ExpectedVersion = 1, Reason = "Reconciled",
-            Input = first.Input with { Completed = 5 } };
-        var failure = await f.Service.SaveEntryAsync(f.Principal, correction, original.Id);
-        Assert.Equal(422, failure.Status);
-        Assert.Equal(new DateOnly(2026, 10, 3), failure.Error!.ConflictDate);
-        Assert.Equal(3, await f.Db.AuditEvents.CountAsync());
-        Assert.Empty(await f.Db.Corrections.ToListAsync());
-        Assert.Equal(4, (await f.Db.ReportEntries.SingleAsync(x => x.Id == original.Id)).DisposedCount);
-        Assert.True((await f.Service.SaveEntryAsync(f.Principal,
-            correction with { Input = first.Input with { Completed = 3 } }, original.Id)).IsSuccess);
+            Input = first.Input with { Completed = 3 } };
+        Assert.True((await f.Service.SaveEntryAsync(f.Principal, correction, original.Id)).IsSuccess);
         var read = (await f.Service.GetEntriesAsync(f.Principal, "backdate", new(2026, 10, 3))).Value!;
-        Assert.Equal(1, Assert.Single(read.Data.Entries).Closing.Service);
+        Assert.Equal(11, Assert.Single(read.Data.Entries).Closing.Service);
         var laterReport = await f.Db.Reports.SingleAsync(x => x.ReportingDate == new DateOnly(2026, 10, 3));
-        Assert.Equal(1, (await f.Db.ReportEntries.SingleAsync(x => x.ReportId == laterReport.Id && x.Kind == MonitoringActivityKind.Service)).ClosingBalance);
+        Assert.Equal(11, (await f.Db.ReportEntries.SingleAsync(x => x.ReportId == laterReport.Id && x.Kind == MonitoringActivityKind.Service)).ClosingBalance);
+    }
+
+    // Break caught: an opening balance must not raise the same-day completion allowance, on create or on correction.
+    [Fact]
+    public async Task CompletionsAboveSameDayReceiptsAreRejectedEvenWhenOpeningBalanceCoversThem()
+    {
+        await using var f = await Fixture.Create();
+        await f.Setup();
+        var overCompleted = Save(new(2026, 10, 1), "backdate", "Late") with {
+            Input = Input(new(2026, 10, 1)) with { Received = 2, Completed = 5, AvgDisposalDays = 2 } };
+        var created = await f.Service.SaveEntryAsync(f.Principal, overCompleted);
+        Assert.Equal(422, created.Status);
+        Assert.Contains("completed", created.Error!.FieldErrors!.Keys);
+        Assert.Empty(await f.Db.ReportEntries.ToListAsync());
+
+        var valid = Save(new(2026, 10, 1), "backdate", "Late") with { RequestId = "valid-entry",
+            Input = Input(new(2026, 10, 1)) with { Received = 2, Completed = 2, AvgDisposalDays = 2 } };
+        var saved = (await f.Service.SaveEntryAsync(f.Principal, valid)).Value!;
+        var correction = valid with { RequestId = "over-correction", ExpectedVersion = 1, Reason = "Reconciled",
+            Input = valid.Input with { Completed = 5 } };
+        var rejected = await f.Service.SaveEntryAsync(f.Principal, correction, saved.Id);
+        Assert.Equal(422, rejected.Status);
+        Assert.Contains("completed", rejected.Error!.FieldErrors!.Keys);
     }
 
     [Fact]
@@ -379,16 +395,16 @@ public sealed class MonitoringServiceTests
         Assert.Equal(25, (await f.Service.GetServicesAsync(f.Principal)).Value!.Data.Count);
         await f.Setup();
         var command = Save(new(2026, 10, 1), "backdate", "Late") with { Input = Input(new(2026, 10, 1)) with {
-            Received = 2, Completed = 4, SlaWithinTime = 4, AvgDisposalDays = 2, AmountPaise = 101,
-            ComplaintsReceived = 1, ComplaintsResolved = 2, FieldCompleted = 1 } };
+            Received = 4, Completed = 2, SlaWithinTime = 2, AvgDisposalDays = 2, AmountPaise = 101,
+            ComplaintsReceived = 2, ComplaintsResolved = 1, FieldReceived = 1, FieldCompleted = 1 } };
         await f.Service.SaveEntryAsync(f.Principal, command);
         var filter = new PeriodFilter(new(2026, 10, 1), new(2026, 10, 3));
         var dashboard = (await f.Service.GetDashboardAsync(f.Commissioner, filter)).Value!;
         var row = Assert.Single(dashboard.Data.Rows, x => x.OfficeId == f.Office);
-        Assert.Equal(8, row.Pending);
-        Assert.Equal(2, row.ComplaintsPending);
-        Assert.Equal(4, row.FieldPending);
-        Assert.Equal(200, row.DisposalPct);
+        Assert.Equal(12, row.Pending);
+        Assert.Equal(4, row.ComplaintsPending);
+        Assert.Equal(5, row.FieldPending);
+        Assert.Equal(50, row.DisposalPct);
         Assert.Equal(100, row.SlaPct);
         Assert.Equal(101, row.AmountPaise);
         Assert.Equal(75, row.Expected);

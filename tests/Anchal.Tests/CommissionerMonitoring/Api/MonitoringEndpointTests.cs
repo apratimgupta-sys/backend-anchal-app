@@ -187,6 +187,69 @@ public sealed class MonitoringEndpointTests
         Assert.True(error.TryGetProperty("message", out _));
     }
 
+    // Break caught: malformed or wrongly typed setup values must return a 422 validation envelope, never an unhandled 500,
+    // and a numeric string must not be silently coerced into a saved balance.
+    [Theory]
+    [InlineData("\"2026-02-30\"", "{\"service\":0,\"complaints\":0,\"field\":0}")]
+    [InlineData("\"\"", "{\"service\":0,\"complaints\":0,\"field\":0}")]
+    [InlineData("\"2026-10-01\"", "{\"service\":1.5,\"complaints\":0,\"field\":0}")]
+    [InlineData("\"2026-10-01\"", "{\"service\":null,\"complaints\":0,\"field\":0}")]
+    [InlineData("\"2026-10-01\"", "{\"service\":1e21,\"complaints\":0,\"field\":0}")]
+    [InlineData("\"2026-10-01\"", "{\"service\":\"7\",\"complaints\":0,\"field\":0}")]
+    public async Task MalformedSetupValuesReturnValidationErrorAndSaveNothing(string startDate, string opening)
+    {
+        await using var host = await Host.Create();
+        using (var login = await host.Login()) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"startDate\":" + startDate
+            + ",\"balances\":[{\"serviceId\":1,\"opening\":" + opening + "}]}";
+        using var request = new HttpRequestMessage(HttpMethod.Put, Root + "/office/setup")
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", AllowedOrigin);
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal("VALIDATION", JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString());
+        using var read = await host.Client.GetAsync(Root + "/office/setup");
+        Assert.Equal("null", (await read.Content.ReadAsStringAsync()).Trim());
+    }
+
+    // Break caught: a non-array balances value reached the deserializer and surfaced as a 500.
+    [Fact]
+    public async Task SetupWithNonArrayBalancesReturnsValidationError()
+    {
+        await using var host = await Host.Create();
+        using (var login = await host.Login()) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"startDate\":\"2026-10-01\",\"balances\":\"x\"}";
+        using var request = new HttpRequestMessage(HttpMethod.Put, Root + "/office/setup")
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", AllowedOrigin);
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+    }
+
+    // Break caught: the entry endpoints shared the same unguarded deserialization, so a fractional count was a 500.
+    [Theory]
+    [InlineData("1.5")]
+    [InlineData("null")]
+    [InlineData("\"3\"")]
+    public async Task MalformedEntryCountReturnsValidationError(string received)
+    {
+        await using var host = await Host.Create();
+        using (var login = await host.Login()) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"mode\":\"today\",\"reason\":null,"
+            + "\"input\":{\"serviceId\":1,\"ward\":\"W1\",\"received\":" + received + "}}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/office/entries")
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", AllowedOrigin);
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+    }
+
     private sealed class Host(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client => client;

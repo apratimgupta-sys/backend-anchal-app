@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using Anchal.Application.CommissionerMonitoring.DTOs;
 using Anchal.Application.CommissionerMonitoring.Services;
@@ -14,6 +15,8 @@ namespace Anchal.Api.CommissionerMonitoring;
 public sealed class MonitoringHttpAdapter(IMonitoringContext db, TimeProvider clock)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    // Request bodies are read strictly: the Web defaults allow numbers to be read from strings ("7" becomes 7).
+    private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.Web) { NumberHandling = JsonNumberHandling.Strict };
     private Dictionary<Guid, int>? officeNumbers;
     public DateOnly Today => MonitoringRules.Today(clock.GetUtcNow());
     public async Task<IActionResult> Result<T>(MonitoringResult<T> result, CancellationToken ct) => !result.IsSuccess ? new ObjectResult(result.Error) { StatusCode = result.Status } : new JsonResult(await Map(result.Value, ct)) { StatusCode = result.Status };
@@ -45,7 +48,13 @@ public sealed class MonitoringHttpAdapter(IMonitoringContext db, TimeProvider cl
         try { using var document = JsonDocument.Parse(buffer.AsMemory(0, length)); if (document.RootElement.ValueKind != JsonValueKind.Object) throw Validation("body", "Enter an object"); return document.RootElement.Clone(); }
         catch (JsonException) { throw new MonitoringRuleException(400, new("VALIDATION", "Invalid JSON")); }
     }
-    public SetupCommand Setup(JsonElement body) => body.Deserialize<SetupCommand>(Json) ?? throw Validation("body", "Enter an object");
-    public SaveEntryCommand Entry(JsonElement body) => body.Deserialize<SaveEntryCommand>(Json) ?? throw Validation("body", "Enter an object");
+    public SetupCommand Setup(JsonElement body) => Command<SetupCommand>(body);
+    public SaveEntryCommand Entry(JsonElement body) => Command<SaveEntryCommand>(body);
+    // A type mismatch (fraction for an integer, null, bad date, wrong container) is a client error, not a server failure.
+    private static T Command<T>(JsonElement body) where T : class
+    {
+        try { return body.Deserialize<T>(StrictJson) ?? throw Validation("body", "Enter an object"); }
+        catch (JsonException ex) { throw Validation(string.IsNullOrEmpty(ex.Path) || ex.Path == "$" ? "body" : ex.Path.TrimStart('$', '.'), "Enter a valid value"); }
+    }
     public static MonitoringRuleException Validation(string field, string message) => new(422, new("VALIDATION", "Please correct the highlighted fields", new Dictionary<string, string> { [field] = message }));
 }

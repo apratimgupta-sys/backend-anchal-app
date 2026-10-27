@@ -42,5 +42,18 @@ public sealed class MonitoringRulesTests
                 MonitoringRules.ValidateEntry(input, new(2026, 10, 6))).Error.FieldErrors!);
     }
 
+    [Fact]
+    public void RejectsCompletionsAboveSameDayReceiptsForEveryTrack()
+    {
+        var cases = new[] {
+            (Entry(new(2026, 10, 6)) with { Received = 1, Completed = 2, SlaWithinTime = 0, AvgDisposalDays = 1 }, "completed"),
+            (Entry(new(2026, 10, 6)) with { ComplaintsReceived = 1, ComplaintsResolved = 2 }, "complaintsResolved"),
+            (Entry(new(2026, 10, 6)) with { FieldReceived = 0, FieldCompleted = 1 }, "fieldCompleted") };
+        foreach (var (input, field) in cases)
+            Assert.Contains(field, Assert.Throws<MonitoringRuleException>(() =>
+                MonitoringRules.ValidateEntry(input, new(2026, 10, 6))).Error.FieldErrors!.Keys);
+        MonitoringRules.ValidateEntry(Entry(new(2026, 10, 6)) with { Received = 2, Completed = 2, SlaWithinTime = 2, AvgDisposalDays = 1 }, new(2026, 10, 6));
+    }
+
     private static EntryInput Entry(DateOnly date) => new(1, date, "1", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
 }
