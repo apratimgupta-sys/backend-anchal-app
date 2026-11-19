@@ -19,6 +19,7 @@ public sealed partial class CommissionerMonitoringDbContext(DbContextOptions<Com
     public DbSet<MonitoringReportEntry> ReportEntries => Set<MonitoringReportEntry>();
     public DbSet<MonitoringCorrection> Corrections => Set<MonitoringCorrection>();
     public DbSet<MonitoringAuditEvent> AuditEvents => Set<MonitoringAuditEvent>();
+    public DbSet<MonitoringFieldVisit> FieldVisits => Set<MonitoringFieldVisit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,8 +34,35 @@ public sealed partial class CommissionerMonitoringDbContext(DbContextOptions<Com
             entity.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
             entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Role).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Designation).HasMaxLength(120);
             entity.Property(x => x.CreatedAt).HasColumnType("timestamp with time zone");
             entity.HasIndex(x => x.NormalizedLoginName).IsUnique();
+        });
+
+        modelBuilder.Entity<MonitoringFieldVisit>(entity =>
+        {
+            entity.ToTable("monitoring_field_visits", table =>
+            {
+                table.HasCheckConstraint("ck_monitoring_field_visit_ward", "\"Ward\" BETWEEN 1 AND 53");
+                table.HasCheckConstraint("ck_monitoring_field_visit_service", "\"ServiceId\" BETWEEN 1 AND 25");
+                table.HasCheckConstraint("ck_monitoring_field_visit_accuracy", "\"AccuracyMetres\" >= 0");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.IssueAction).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.VoidReason).HasMaxLength(1000);
+            entity.Property(x => x.PhotoOneKey).HasMaxLength(512);
+            entity.Property(x => x.PhotoTwoKey).HasMaxLength(512);
+            entity.Property(x => x.GpsCapturedAt).HasColumnType("timestamp with time zone");
+            entity.Property(x => x.ReceivedAt).HasColumnType("timestamp with time zone");
+            entity.Property(x => x.VoidedAt).HasColumnType("timestamp with time zone");
+            entity.HasOne(x => x.Office).WithMany()
+                .HasForeignKey(x => x.OfficeId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.OfficerUser).WithMany()
+                .HasForeignKey(x => x.OfficerUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.VoidedByUser).WithMany()
+                .HasForeignKey(x => x.VoidedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.OfficerUserId, x.VisitDate });
+            entity.HasIndex(x => new { x.OfficeId, x.VisitDate });
         });
 
         modelBuilder.Entity<MonitoringOffice>(entity =>

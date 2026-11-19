@@ -8,6 +8,7 @@ public static class MonitoringPolicies
     public const string Office = "MonitoringOffice";
     public const string Commissioner = "MonitoringCommissioner";
     public const string OfficeScope = "MonitoringOfficeScope";
+    public const string FieldOfficer = "MonitoringFieldOfficer";
     public const string ScopeClaim = "monitoring_scope";
     public const string ScopeValue = "commissioner_monitoring";
     public const string RoleClaim = "monitoring_role";
@@ -15,6 +16,7 @@ public static class MonitoringPolicies
     public const string OfficeIdClaim = "monitoring_office_id";
     public const string OfficeRole = "AnchalOffice";
     public const string CommissionerRole = "Commissioner";
+    public const string FieldOfficerRole = "FieldOfficer";
 
     public static void AddTo(AuthorizationOptions options)
     {
@@ -22,6 +24,8 @@ public static class MonitoringPolicies
             .AddRequirements(new MonitoringRoleRequirement(OfficeRole)));
         options.AddPolicy(Commissioner, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
             .AddRequirements(new MonitoringRoleRequirement(CommissionerRole)));
+        options.AddPolicy(FieldOfficer, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
+            .AddRequirements(new MonitoringRoleRequirement(FieldOfficerRole)));
         options.AddPolicy(OfficeScope, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
             .AddRequirements(new MonitoringOfficeScopeRequirement()));
     }
