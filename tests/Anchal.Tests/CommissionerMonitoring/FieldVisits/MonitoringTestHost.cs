@@ -31,6 +31,21 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
     public Task<HttpResponseMessage> Login(string username, string password = SeedPassword) =>
         client.PostAsync(Root + "/login", Json(new { username, password }));
 
+    /// A second client on the same app with its own cookie jar, for a test that
+    /// needs two accounts signed in at once.
+    public HttpClient NewClient()
+    {
+        var http = new HttpClient(new HttpClientHandler { CookieContainer = new System.Net.CookieContainer() })
+        {
+            BaseAddress = client.BaseAddress
+        };
+        http.DefaultRequestHeaders.Add("Origin", AllowedOrigin);
+        return http;
+    }
+
+    public static Task<HttpResponseMessage> Login(HttpClient http, string username, string password = SeedPassword) =>
+        http.PostAsync(Root + "/login", Json(new { username, password }));
+
     public static StringContent Json(object value) =>
         new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
 

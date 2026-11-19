@@ -186,6 +186,11 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         CancellationToken ct = default) => Run(async () =>
     {
         var session = await Authorize(principal, ct);
+        // Reporting accounts only. A field officer is bound to an office without
+        // being entitled to read that office's correction trail — its actors,
+        // reasons and before/after figures (spec 7.1 gives them their own
+        // filings and nothing else).
+        if (session.Role == "officer") Fail(403, "Access denied", "FORBIDDEN");
         var audits = await LoadAudits(session.OfficeId, ct);
         var history = audits.OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id).Take(200).Select(x =>
         {

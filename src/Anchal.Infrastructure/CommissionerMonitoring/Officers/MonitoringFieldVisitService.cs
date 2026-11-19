@@ -20,6 +20,8 @@ public sealed class MonitoringFieldVisitService(
     public const int AccuracyMetresLimit = 100;
     public const int CaptureWindowMinutes = 30;
     public const int IssueActionMinimumLength = 20;
+    // Matches the IssueAction column width in CommissionerMonitoringDbContext.
+    public const int IssueActionMaximumLength = 4000;
     public const int PageSize = 50;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -37,8 +39,7 @@ public sealed class MonitoringFieldVisitService(
                 throw Validation("requestId", "Invalid request identifier");
 
             var fingerprint = Fingerprint(input);
-            var existing = await Visits().SingleOrDefaultAsync(
-                x => x.OfficerUserId == session.UserId && x.RequestId == command.RequestId, ct);
+            var existing = await Replayed(session.UserId, command.RequestId, ct);
             if (existing is not null)
             {
                 if (existing.Fingerprint != fingerprint)
@@ -47,7 +48,7 @@ public sealed class MonitoringFieldVisitService(
                 return await Dto(existing, ct);
             }
 
-            Validate(input, today);
+            Validate(input, today, now);
             var office = await db.Offices.SingleOrDefaultAsync(
                 x => x.Code == "anchal" + input.OfficeId.ToString(CultureInfo.InvariantCulture) && x.IsActive, ct)
                 ?? throw Validation("officeId", "Select an active Anchal");
@@ -73,7 +74,24 @@ public sealed class MonitoringFieldVisitService(
                 IssueAction = input.IssueAction.Trim()
             };
             db.FieldVisits.Add(visit);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Another submission under the same request id committed between
+                // the check above and this insert — a double-tapped Submit. Give
+                // back what was stored rather than a failure the officer would
+                // answer by filing the visit a second time.
+                db.Entry(visit).State = EntityState.Detached;
+                var raced = await Replayed(session.UserId, command.RequestId, ct);
+                if (raced is null) throw;
+                if (raced.Fingerprint != fingerprint)
+                    throw new MonitoringRuleException(409,
+                        new("CONFLICT", "This request identifier was already used for different data"));
+                return await Dto(raced, ct);
+            }
             return await Dto(visit, ct);
         });
 
@@ -127,22 +145,38 @@ public sealed class MonitoringFieldVisitService(
             return await Dto(visit, ct);
         });
 
+    private Task<MonitoringFieldVisit?> Replayed(Guid officerUserId, string requestId, CancellationToken ct) =>
+        Visits().AsNoTracking().SingleOrDefaultAsync(
+            x => x.OfficerUserId == officerUserId && x.RequestId == requestId, ct);
+
     private IQueryable<MonitoringFieldVisit> Visits() => db.FieldVisits
         .Include(x => x.Office).Include(x => x.OfficerUser);
 
-    private void Validate(FieldVisitInputDto input, DateOnly today)
+    private static void Validate(FieldVisitInputDto input, DateOnly today, DateTimeOffset now)
     {
         if (input.VisitDate != today)
             throw Validation("visitDate", "A visit can only be recorded on the day it was made");
-        if (!TimeOnly.TryParseExact(input.VisitTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        if (!TimeOnly.TryParseExact(input.VisitTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var visitTime))
             throw Validation("visitTime", "Enter a valid time");
+        // The record is evidence of a visit already made, so a time the server
+        // has not reached yet contradicts its own receipt timestamp.
+        if (visitTime > TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Kolkata").DateTime))
+            throw Validation("visitTime", "A visit cannot be recorded for a time later than now");
         if (input.OfficeId is < 1 or > 6) throw Validation("officeId", "Select an Anchal");
         if (input.Ward is < 1 or > 53) throw Validation("ward", "Select a ward from 1 to 53");
         if (input.ServiceId is < 1 or > 25) throw Validation("serviceId", "Select an activity");
-        if ((input.IssueAction ?? string.Empty).Trim().Length < IssueActionMinimumLength)
+        var issueAction = (input.IssueAction ?? string.Empty).Trim();
+        if (issueAction.Length < IssueActionMinimumLength)
             throw Validation("issueAction",
                 $"Describe what was seen and what is to be done (at least {IssueActionMinimumLength} characters)");
+        if (issueAction.Length > IssueActionMaximumLength)
+            throw Validation("issueAction",
+                $"Shorten this to {IssueActionMaximumLength} characters or fewer");
+        // A coarse fix is allowed through and stored unverified (spec 7.3); an
+        // impossible one is refused here, because the database refuses it too
+        // and that arrives as an unrecoverable 500.
         if (input.Gps is null || !double.IsFinite(input.Gps.Latitude) || !double.IsFinite(input.Gps.Longitude) ||
+            !double.IsFinite(input.Gps.AccuracyMetres) || input.Gps.AccuracyMetres < 0 ||
             input.Gps.Latitude is < -90 or > 90 || input.Gps.Longitude is < -180 or > 180)
             throw Validation("gps", "Capture the location at the site");
     }

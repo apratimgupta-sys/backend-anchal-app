@@ -1,6 +1,10 @@
+using System.Security.Claims;
 using Anchal.Application.CommissionerMonitoring.Auth;
+using Anchal.Infrastructure.CommissionerMonitoring.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Anchal.Api.CommissionerMonitoring;
 
@@ -19,7 +23,8 @@ public sealed class MustChangePasswordFilter : IAsyncActionFilter
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var mustChange = context.HttpContext.User
-            .FindFirst(MonitoringPolicies.MustChangePasswordClaim)?.Value == "true";
+            .FindFirst(MonitoringPolicies.MustChangePasswordClaim)?.Value == "true"
+            || await ResetSinceSignIn(context.HttpContext);
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
         if (mustChange && !Allowed.Any(x => path.Equals(x, StringComparison.OrdinalIgnoreCase)))
         {
@@ -33,5 +38,20 @@ public sealed class MustChangePasswordFilter : IAsyncActionFilter
         }
 
         await next();
+    }
+
+    /// The claim is minted at sign-in, so a password reset the commissioner made
+    /// afterwards is invisible to it. Read the officer's row instead: a reset
+    /// then ends the session on the next request, which is what "reset the
+    /// password because the phone was lost" has to mean.
+    private static async Task<bool> ResetSinceSignIn(HttpContext http)
+    {
+        if (http.User.FindFirstValue(MonitoringPolicies.RoleClaim) != MonitoringPolicies.FieldOfficerRole ||
+            !Guid.TryParse(http.User.FindFirstValue(MonitoringPolicies.UserIdClaim), out var userId))
+            return false;
+        var db = http.RequestServices.GetService<CommissionerMonitoringDbContext>();
+        if (db is null) return false;
+        return await db.Users.AsNoTracking()
+            .Where(x => x.Id == userId).Select(x => x.MustChangePassword).SingleOrDefaultAsync();
     }
 }
