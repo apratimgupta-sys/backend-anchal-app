@@ -20,6 +20,10 @@ public static class CommissionerMonitoringRegistration
             provider.GetRequiredService<Auth.MonitoringPasswordHasher>(),
             provider.GetRequiredService<IMonitoringService>(),
             provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.AddScoped<IMonitoringFieldVisitService>(provider => new Officers.MonitoringFieldVisitService(
+            provider.GetRequiredService<Persistence.CommissionerMonitoringDbContext>(),
+            provider.GetRequiredService<IMonitoringService>(),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 

@@ -38,3 +38,17 @@ public sealed record MonitoringRowDto(Guid OfficeId, string OfficeCode, long Rec
     IReadOnlyList<string> ReviewReasons);
 public sealed record AuditDto(Guid Id, Guid OfficeId, string Actor, DateTimeOffset At, string Action,
     string? Reason, string? Before, string After);
+
+public sealed record GpsReadingDto(double Latitude, double Longitude, double AccuracyMetres, DateTimeOffset CapturedAt);
+public sealed record FieldVisitInputDto(DateOnly VisitDate, string VisitTime, int OfficeId, int Ward, int ServiceId,
+    GpsReadingDto Gps, string IssueAction);
+public sealed record SaveFieldVisitCommand(string RequestId, FieldVisitInputDto Input);
+// OfficeId stays a Guid here so the HTTP adapter rewrites it to the Anchal number, as it
+// does everywhere else; VisitTime is HH:mm, the form's own shape.
+public sealed record FieldVisitDto(Guid Id, DateOnly VisitDate, string VisitTime, Guid OfficeId, int Ward,
+    int ServiceId, GpsReadingDto Gps, string IssueAction, Guid OfficerId, string OfficerName,
+    string OfficerDesignation, DateTimeOffset ReceivedAt, bool VerifiedOnSite,
+    DateTimeOffset? VoidedAt, string? VoidReason);
+public sealed record FieldVisitPageDto(IReadOnlyList<FieldVisitDto> Rows, int Total);
+public sealed record FieldVisitFilter(DateOnly From, DateOnly To, int? OfficeId, int? Ward, int? ServiceId,
+    Guid? OfficerId, int Page);

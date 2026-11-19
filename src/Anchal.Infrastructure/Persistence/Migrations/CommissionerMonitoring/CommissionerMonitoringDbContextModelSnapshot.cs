@@ -156,6 +156,11 @@ namespace Anchal.Infrastructure.Persistence.Migrations.CommissionerMonitoring
                     b.Property<double>("AccuracyMetres")
                         .HasColumnType("double precision");
 
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTimeOffset>("GpsCapturedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -187,6 +192,11 @@ namespace Anchal.Infrastructure.Persistence.Migrations.CommissionerMonitoring
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("RequestId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("ServiceId")
                         .HasColumnType("integer");
 
@@ -217,6 +227,9 @@ namespace Anchal.Infrastructure.Persistence.Migrations.CommissionerMonitoring
                     b.HasIndex("VoidedByUserId");
 
                     b.HasIndex("OfficeId", "VisitDate");
+
+                    b.HasIndex("OfficerUserId", "RequestId")
+                        .IsUnique();
 
                     b.HasIndex("OfficerUserId", "VisitDate");
 
