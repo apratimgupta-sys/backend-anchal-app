@@ -15,6 +15,7 @@ public static class CommissionerMonitoringApiRegistration
     {
         services.Configure<CommissionerMonitoringRouteOptions>(configuration.GetSection(CommissionerMonitoringRouteOptions.Section));
         services.AddScoped<MonitoringHttpAdapter>();
+        services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options => options.Filters.Add<MustChangePasswordFilter>());
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         services.AddCors(options => options.AddPolicy(CorsPolicy, policy => policy

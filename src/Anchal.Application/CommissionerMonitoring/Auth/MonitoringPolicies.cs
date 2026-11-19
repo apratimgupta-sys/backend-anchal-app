@@ -14,6 +14,7 @@ public static class MonitoringPolicies
     public const string RoleClaim = "monitoring_role";
     public const string UserIdClaim = "monitoring_user_id";
     public const string OfficeIdClaim = "monitoring_office_id";
+    public const string MustChangePasswordClaim = "monitoring_must_change_password";
     public const string OfficeRole = "AnchalOffice";
     public const string CommissionerRole = "Commissioner";
     public const string FieldOfficerRole = "FieldOfficer";

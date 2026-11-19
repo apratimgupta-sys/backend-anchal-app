@@ -22,9 +22,9 @@ public sealed class MonitoringAuthenticator(
             .SingleOrDefaultAsync(x => x.NormalizedLoginName == normalized, cancellationToken);
         if (user is null || !user.IsActive || !hasher.VerifyPassword(password, user.PasswordHash)) return null;
 
+        var officeBound = user.Role is MonitoringPolicies.OfficeRole or MonitoringPolicies.FieldOfficerRole;
         Guid? officeId = null;
-        if (user.Role == MonitoringPolicies.OfficeRole && user.OfficeAssignments.Count == 1 &&
-            user.OfficeAssignments.Single().Office.IsActive)
+        if (officeBound && user.OfficeAssignments.Count == 1 && user.OfficeAssignments.Single().Office.IsActive)
         {
             officeId = user.OfficeAssignments.Single().OfficeId;
         }
@@ -33,7 +33,7 @@ public sealed class MonitoringAuthenticator(
             return null;
         }
 
-        if (user.Role == MonitoringPolicies.OfficeRole && officeId is null) return null;
+        if (officeBound && officeId is null) return null;
 
         var claims = new List<Claim>
         {
@@ -45,6 +45,8 @@ public sealed class MonitoringAuthenticator(
         };
         if (officeId.HasValue)
             claims.Add(new Claim(MonitoringPolicies.OfficeIdClaim, officeId.Value.ToString()));
+        if (user.MustChangePassword)
+            claims.Add(new Claim(MonitoringPolicies.MustChangePasswordClaim, "true"));
 
         var secret = Required("Secret");
         var issuer = Required("Issuer");

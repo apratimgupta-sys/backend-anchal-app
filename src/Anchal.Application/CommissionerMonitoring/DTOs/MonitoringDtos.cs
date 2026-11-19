@@ -11,7 +11,15 @@ public sealed record MonitoringResult<T>(T? Value, MonitoringError? Error, int S
 // LastUpdated is unknown when the underlying data has no persisted modification timestamp.
 // Revision identifies that response's content independently of the retrieval time.
 public sealed record MonitoringRead<T>(T Data, DateTimeOffset RetrievedAt, DateTimeOffset? LastUpdated, string? Revision = null);
-public sealed record SessionDto(Guid UserId, string Username, string Role, Guid? OfficeId, string? OfficeCode, long? ExpiresAt);
+public sealed record SessionDto(Guid UserId, string Username, string Role, Guid? OfficeId, string? OfficeCode, long? ExpiresAt,
+    OfficerProfileDto? Officer = null, bool? MustChangePassword = null);
+// HomeOfficeId is the Anchal number the officer is posted to, not the office's Guid:
+// the adapter only rewrites a key named officeId, and this value is already public-facing.
+public sealed record OfficerProfileDto(Guid Id, string Username, string Name, string Designation, int HomeOfficeId, bool Active);
+public sealed record CreateOfficerCommand(string Username, string Name, string Designation, int HomeOfficeId);
+public sealed record CreatedOfficerDto(OfficerProfileDto Officer, string TemporaryPassword);
+public sealed record TemporaryPasswordDto(string TemporaryPassword);
+public sealed record ChangePasswordCommand(string CurrentPassword, string NewPassword);
 public sealed record ServiceDto(int Id, string Name);
 public sealed record OpeningBalanceDto(int ServiceId, Balances Opening);
 public sealed record SetupDto(Guid OfficeId, DateOnly StartDate, int Version, IReadOnlyList<OpeningBalanceDto> Balances);

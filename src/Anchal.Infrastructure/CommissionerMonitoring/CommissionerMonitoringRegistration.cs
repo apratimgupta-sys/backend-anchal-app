@@ -14,6 +14,12 @@ public static class CommissionerMonitoringRegistration
         services.AddScoped<IMonitoringContext>(provider => provider.GetRequiredService<CommissionerMonitoringDbContext>());
         services.AddScoped<IMonitoringService>(provider => new MonitoringService(
             provider.GetRequiredService<IMonitoringContext>(), provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        services.AddScoped<Auth.MonitoringPasswordHasher>();
+        services.AddScoped<IMonitoringOfficerService>(provider => new Officers.MonitoringOfficerService(
+            provider.GetRequiredService<Persistence.CommissionerMonitoringDbContext>(),
+            provider.GetRequiredService<Auth.MonitoringPasswordHasher>(),
+            provider.GetRequiredService<IMonitoringService>(),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 

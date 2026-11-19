@@ -51,7 +51,7 @@ public sealed class MonitoringHttpAdapter(IMonitoringContext db, TimeProvider cl
     public SetupCommand Setup(JsonElement body) => Command<SetupCommand>(body);
     public SaveEntryCommand Entry(JsonElement body) => Command<SaveEntryCommand>(body);
     // A type mismatch (fraction for an integer, null, bad date, wrong container) is a client error, not a server failure.
-    private static T Command<T>(JsonElement body) where T : class
+    public static T Command<T>(JsonElement body) where T : class
     {
         try { return body.Deserialize<T>(StrictJson) ?? throw Validation("body", "Enter an object"); }
         catch (JsonException ex) { throw Validation(string.IsNullOrEmpty(ex.Path) || ex.Path == "$" ? "body" : ex.Path.TrimStart('$', '.'), "Enter a valid value"); }

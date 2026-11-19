@@ -32,12 +32,16 @@ public sealed class MonitoringAuthorizationHandler(CommissionerMonitoringDbConte
         }
 
         var officeIdClaims = context.User.FindAll(MonitoringPolicies.OfficeIdClaim).ToArray();
-        var validOffice = user.Role == MonitoringPolicies.OfficeRole &&
+        // An office account and a field officer are both bound to exactly one active office.
+        var officeBound = user.Role is MonitoringPolicies.OfficeRole or MonitoringPolicies.FieldOfficerRole;
+        var validOfficeBinding = officeBound &&
             officeIdClaims.Length == 1 &&
             Guid.TryParse(officeIdClaims[0].Value, out var officeId) &&
             user.OfficeAssignments.Count == 1 &&
             user.OfficeAssignments.Single().OfficeId == officeId &&
             user.OfficeAssignments.Single().Office.IsActive;
+        var validOffice = user.Role == MonitoringPolicies.OfficeRole && validOfficeBinding;
+        var validFieldOfficer = user.Role == MonitoringPolicies.FieldOfficerRole && validOfficeBinding;
         var validCommissioner = user.Role == MonitoringPolicies.CommissionerRole &&
             officeIdClaims.Length == 0 && user.OfficeAssignments.Count == 0;
 
@@ -45,7 +49,8 @@ public sealed class MonitoringAuthorizationHandler(CommissionerMonitoringDbConte
         {
             if (requirement is MonitoringRoleRequirement role &&
                 ((role.Role == MonitoringPolicies.OfficeRole && validOffice) ||
-                 (role.Role == MonitoringPolicies.CommissionerRole && validCommissioner)))
+                 (role.Role == MonitoringPolicies.CommissionerRole && validCommissioner) ||
+                 (role.Role == MonitoringPolicies.FieldOfficerRole && validFieldOfficer)))
             {
                 context.Succeed(requirement);
             }

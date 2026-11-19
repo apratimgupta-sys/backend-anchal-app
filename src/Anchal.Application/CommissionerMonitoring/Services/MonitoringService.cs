@@ -286,13 +286,26 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 Fail(403, "Office assignment unavailable", "FORBIDDEN");
             officeId = assignment!.OfficeId; officeCode = assignment.Office.Code; role = "office";
         }
+        else if (user.Role == MonitoringPolicies.FieldOfficerRole)
+        {
+            var assignment = user.OfficeAssignments.Count == 1 ? user.OfficeAssignments.Single() : null;
+            if (assignment is null || !assignment.Office.IsActive ||
+                Single(MonitoringPolicies.OfficeIdClaim) != assignment.OfficeId.ToString())
+                Fail(403, "Office assignment unavailable", "FORBIDDEN");
+            officeId = assignment!.OfficeId; officeCode = assignment.Office.Code; role = "officer";
+        }
         else if (user.Role == MonitoringPolicies.CommissionerRole && user.OfficeAssignments.Count == 0 &&
                  !identity.HasClaim(x => x.Type == MonitoringPolicies.OfficeIdClaim)) role = "commissioner";
         else { Fail(403, "Monitoring role unavailable", "FORBIDDEN"); return null!; }
         if (requiredRole is not null && role != requiredRole) Fail(403, $"{requiredRole} access required", "FORBIDDEN");
         long? expiresAt = long.TryParse(Single("exp"), out var seconds) && seconds >= 0 && seconds <= long.MaxValue / 1000
             ? seconds * 1000 : null;
-        return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt);
+        if (role != "officer") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt);
+        var homeOfficeId = officeCode is { Length: > 6 } && int.TryParse(officeCode[6..], out var number) ? number : 0;
+        return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
+            new OfficerProfileDto(user.Id, user.LoginName, user.DisplayName, user.Designation ?? string.Empty,
+                homeOfficeId, user.IsActive),
+            user.MustChangePassword);
     }
 
     private IQueryable<MonitoringOffice> ActiveOffices(PeriodFilter filter) =>
