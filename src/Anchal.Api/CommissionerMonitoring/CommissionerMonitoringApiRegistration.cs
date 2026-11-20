@@ -18,8 +18,10 @@ public static class CommissionerMonitoringApiRegistration
         services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options => options.Filters.Add<MustChangePasswordFilter>());
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        var originSuffixes = configuration.GetSection("Cors:AllowedOriginSuffixes").Get<string[]>() ?? [];
         services.AddCors(options => options.AddPolicy(CorsPolicy, policy => policy
-            .WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+            .SetIsOriginAllowed(origin => MonitoringOriginPolicy.IsAllowed(origin, origins, originSuffixes))
+            .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
         services.AddRateLimiter(options => options.AddPolicy("monitoring-login", context =>
             RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
@@ -57,9 +59,11 @@ public static class CommissionerMonitoringApiRegistration
         if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method) && !HttpMethods.IsOptions(context.Request.Method))
         {
             var origin = context.Request.Headers.Origin.ToString();
-            var allowed = context.RequestServices.GetRequiredService<IConfiguration>().GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+            var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+            var allowed = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+            var suffixes = configuration.GetSection("Cors:AllowedOriginSuffixes").Get<string[]>() ?? [];
             var sameOrigin = string.Equals(origin, $"{context.Request.Scheme}://{context.Request.Host}", StringComparison.OrdinalIgnoreCase);
-            var permitted = sameOrigin || allowed.Any(x => string.Equals(x, origin, StringComparison.OrdinalIgnoreCase));
+            var permitted = sameOrigin || MonitoringOriginPolicy.IsAllowed(origin, allowed, suffixes);
             var login = context.Request.Path.StartsWithSegments(CommissionerMonitoringRouteOptions.Prefix + "/login");
             var cookie = context.Request.Cookies.ContainsKey(CommissionerMonitoringRouteOptions.CookieName) && !context.Request.Headers.ContainsKey("Authorization");
             var bearer = context.Request.Cookies.Count == 0 && context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) && !login;

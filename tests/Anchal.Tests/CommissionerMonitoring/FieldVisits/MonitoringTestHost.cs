@@ -74,7 +74,12 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
         return body.GetProperty("officer");
     }
 
-    public static async Task<MonitoringTestHost> Create()
+    public static Task<MonitoringTestHost> Create() => Create(null, null);
+
+    /// `extraConfig` adds configuration entries; `originHeader` overrides the
+    /// Origin the client sends, for tests about the origin check itself.
+    public static async Task<MonitoringTestHost> Create(
+        Dictionary<string, string?>? extraConfig, string? originHeader)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
@@ -88,6 +93,7 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
             ["Anchal:Jwt:ExpiryMinutes"] = "60",
             ["Cors:AllowedOrigins:0"] = AllowedOrigin
         });
+        if (extraConfig is not null) builder.Configuration.AddInMemoryCollection(extraConfig);
         var databaseRoot = new InMemoryDatabaseRoot();
         var databaseName = Guid.NewGuid().ToString();
         builder.Services.AddDbContext<CommissionerMonitoringDbContext>(x =>
@@ -116,7 +122,7 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
         {
             BaseAddress = new Uri(address)
         };
-        http.DefaultRequestHeaders.Add("Origin", AllowedOrigin);
+        http.DefaultRequestHeaders.Add("Origin", originHeader ?? AllowedOrigin);
         return new(app, http);
     }
 
