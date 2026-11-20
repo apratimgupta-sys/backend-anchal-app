@@ -24,11 +24,19 @@ public static class MonitoringRules
     // happen with no request behind it, and there is no case to dispose of, so
     // the completed-vs-received rule does not apply.
     //
-    // DRIFT RISK: the source of truth is the Primary Monitoring Unit column of
-    // src/shared/services.json in the frontend repo (derived there in
-    // src/domain/service-kind.ts). The backend has no service master, so these
-    // sets are copied by hand and must be updated together with it. Services
-    // not listed are counter shape (grievance, service 12, included).
+    // TWIN: formShape in src/domain/service-kind.ts in the frontend repo, which
+    // derives the same three sets from the Primary Monitoring Unit column of
+    // src/shared/services.json. That column is the source of truth; the backend
+    // has no service master, so these sets are copied by hand.
+    //
+    // An edit to either must be made in both, in the same change — and editing a
+    // `unit` string over there is an edit to both. The failure is quiet: the
+    // frontend test carrying the counter list fails, somebody fixes that test,
+    // and this file keeps the old shape. The service then validates and derives
+    // under one shape and renders under another, and its whole closing history
+    // re-derives on the next read.
+    //
+    // Services not listed are counter shape (grievance, service 12, included).
     private static readonly HashSet<int> FieldWorkServices = [8, 9, 10, 13, 14, 15, 16, 17];
     private static readonly HashSet<int> RevenueServices = [2, 5, 6];
 
@@ -70,9 +78,12 @@ public static class MonitoringRules
     public static void ValidateEntry(EntryInput input, DateOnly today) { var errors = new Dictionary<string, string>(); foreach (var (name, value) in new (string, long)[] { ("received", input.Received), ("completed", input.Completed), ("slaWithinTime", input.SlaWithinTime), ("amountPaise", input.AmountPaise), ("complaintsReceived", input.ComplaintsReceived), ("complaintsResolved", input.ComplaintsResolved), ("fieldReceived", input.FieldReceived), ("fieldCompleted", input.FieldCompleted) }) if (value is < 0 or > 1_000_000_000) errors[name] = "Enter a nonnegative whole number within the allowed limit"; if (input.ServiceId is < 1 or > 25) errors["serviceId"] = "Select a service"; if (input.ServiceDate == default || input.ServiceDate > today) errors["serviceDate"] = "Enter a valid date through today"; if (string.IsNullOrWhiteSpace(input.Ward) || input.Ward.Length > 200) errors["ward"] = "Enter ward number/name (maximum 200 characters)"; if (input.Remarks is null || input.Remarks.Length > 2000) errors["remarks"] = "Remarks must be at most 2000 characters"; if (Collects(input.ServiceId, "slaWithinTime", "completed") && input.SlaWithinTime > input.Completed) errors["slaWithinTime"] = "Cannot exceed completed cases"; if (Collects(input.ServiceId, "completed", "received") && input.Completed > input.Received) errors["completed"] = "Completed cannot exceed received"; if (Collects(input.ServiceId, "complaintsResolved", "complaintsReceived") && input.ComplaintsResolved > input.ComplaintsReceived) errors["complaintsResolved"] = "Resolved complaints cannot exceed received"; if (Collects(input.ServiceId, "fieldCompleted", "fieldReceived") && input.FieldCompleted > input.FieldReceived) errors["fieldCompleted"] = "Completed field tasks cannot exceed received"; if (input.AvgDisposalDays is double days && (!double.IsFinite(days) || days < 0 || days > 100000)) errors["avgDisposalDays"] = "Enter valid average days"; if (input.NothingToReport && !input.IsZeroActivity) errors["nothingToReport"] = "Nothing to report cannot be combined with reported figures"; if (errors.Count > 0) throw new MonitoringRuleException(422, new("VALIDATION", "Please correct the highlighted fields", errors)); }
     public static IReadOnlyList<DerivedEntry> Derive(Balances initial, IEnumerable<EntryInput> entries) { var balance = initial; var result = new List<DerivedEntry>(); foreach (var input in entries.OrderBy(x => x.ServiceDate)) { var opening = balance; // Only counter-shape work has a queue. Field work (grass is cut, a route is fogged) and
             // revenue (payments land in Received, nothing is completed) have none. Counting them
-            // into the service balance drove the balance negative and was rejected
-            // here and by ck_monitoring_closing_nonnegative, which made honest field
-            // entries impossible even after ValidateEntry allowed them.
+            // in broke the two shapes in opposite directions: field work subtracted disposals
+            // against a Received of 0, drove the balance negative, and was rejected here and by
+            // ck_monitoring_closing_nonnegative, so honest field entries were impossible even
+            // after ValidateEntry allowed them; revenue added every payment to the balance and
+            // took nothing off, so it only ever climbed, reporting a pending figure no office
+            // could work off.
             balance = new(balance.Service + (MovesPendingBalance(input.ServiceId) ? input.Received - input.Completed : 0), balance.Complaints + input.ComplaintsReceived - input.ComplaintsResolved, balance.Field + input.FieldReceived - input.FieldCompleted); if (new[] { balance.Service, balance.Complaints, balance.Field }.Any(x => x < 0 || x > int.MaxValue)) throw new MonitoringRuleException(422, new("VALIDATION", $"Invalid pending balance on {input.ServiceDate:yyyy-MM-dd} (service {input.ServiceId})", ConflictDate: input.ServiceDate, ServiceId: input.ServiceId)); result.Add(new(input, opening, balance)); } return result; }
     public static void Fail(int status, string message, string code = "VALIDATION") => throw new MonitoringRuleException(status, new(code, message));
 }

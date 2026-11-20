@@ -319,6 +319,32 @@ public sealed class MonitoringServiceTests
         Assert.Equal(11, (await f.Db.ReportEntries.SingleAsync(x => x.ReportId == laterReport.Id && x.Kind == MonitoringActivityKind.Service)).ClosingBalance);
     }
 
+    /// AvgDisposalDays is no longer collected by any shape, so a correction can
+    /// only resend what was stored. Clearing it when the visible figure reaches
+    /// zero destroys a pre-cutover entry's average on an edit that never
+    /// mentioned it, and no form can put it back. Spec 7.3: a correction leaves
+    /// the hidden fields as they were stored. The other preservation tests all
+    /// lower to a non-zero figure, so none of them reaches this.
+    [Fact]
+    public async Task CorrectingTheVisibleFigureToZeroKeepsAStoredAverage()
+    {
+        await using var f = await Fixture.Create();
+        await f.Setup();
+        var filed = Save(new(2026, 10, 1), "backdate", "Late") with {
+            Input = Input(new(2026, 10, 1)) with { Received = 4, Completed = 2, AvgDisposalDays = 2.5 } };
+        var original = (await f.Service.SaveEntryAsync(f.Principal, filed)).Value!;
+        Assert.Equal(2.5, original.Input.AvgDisposalDays);
+
+        // The office corrects the day's disposals down to none.
+        var correction = filed with { RequestId = "correct-to-zero", ExpectedVersion = 1, Reason = "Nothing was disposed",
+            Input = filed.Input with { Completed = 0 } };
+        var corrected = (await f.Service.SaveEntryAsync(f.Principal, correction, original.Id)).Value!;
+
+        Assert.Equal(2.5, corrected.Input.AvgDisposalDays);
+        var read = (await f.Service.GetEntriesAsync(f.Principal, "backdate", new(2026, 10, 1))).Value!;
+        Assert.Equal(2.5, Assert.Single(read.Data.Entries).Input.AvgDisposalDays);
+    }
+
     // Break caught: an opening balance must not raise the same-day completion allowance, on create or on correction.
     [Fact]
     public async Task CompletionsAboveSameDayReceiptsAreRejectedEvenWhenOpeningBalanceCoversThem()

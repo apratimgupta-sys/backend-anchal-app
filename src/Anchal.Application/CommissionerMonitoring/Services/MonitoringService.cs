@@ -111,8 +111,12 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 Fail(422, "Service/date identity cannot be changed by correction");
             if (old?.Version != command.ExpectedVersion) Fail(409, "Entry changed. Reload before correcting.", "CONFLICT");
             ValidateReason(old is not null, command.Mode, command.Reason);
-            var input = command.Input with { Ward = command.Input.Ward.Trim(), Remarks = command.Input.Remarks.Trim(),
-                AvgDisposalDays = command.Input.Completed > 0 ? command.Input.AvgDisposalDays : null };
+            // AvgDisposalDays is collected by no shape any more, so a correction can only
+            // resend what was stored. Clearing it whenever the visible figure reaches 0
+            // would destroy a pre-cutover entry's average on an edit that never mentioned
+            // it, and nothing could put it back: no form renders the field. Spec 7.3 — a
+            // correction leaves the hidden fields as they were stored.
+            var input = command.Input with { Ward = command.Input.Ward.Trim(), Remarks = command.Input.Remarks.Trim() };
             // Entry snapshots retain the balances from when they were written. A correction to an
             // earlier date can change a later entry's effective ledger position without mutating
             // that historical snapshot, so audit the current derived view rather than the stale
