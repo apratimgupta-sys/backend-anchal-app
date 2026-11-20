@@ -35,7 +35,7 @@ public sealed record DashboardDto(IReadOnlyList<MonitoringRowDto> Rows);
 public sealed record MonitoringRowDto(Guid OfficeId, string OfficeCode, long Received, long Completed,
     long SlaWithinTime, long Pending, double? DisposalPct, double? SlaPct, long AmountPaise,
     long ComplaintsPending, long FieldPending, int Submitted, long Expected, bool Configured,
-    IReadOnlyList<string> ReviewReasons);
+    IReadOnlyList<string> ReviewReasons, long WorkDone = 0);
 public sealed record AuditDto(Guid Id, Guid OfficeId, string Actor, DateTimeOffset At, string Action,
     string? Reason, string? Before, string After);
 

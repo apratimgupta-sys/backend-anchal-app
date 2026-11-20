@@ -222,8 +222,13 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             }
             var entries = Views(setup, all.Where(x => x.OfficeId == office.Id).ToArray());
             var period = Filter(entries, filter);
-            var received = period.Sum(x => x.Input.Received);
-            var completed = period.Sum(x => x.Input.Completed);
+            // Received, completed and pending are counter-shape figures: revenue has payments rather than cases
+            // closed, and field work has work done rather than a queue. Summing them in would push the disposal
+            // ratio past 100% (field work completes against a received of 0). Field work gets its own figure.
+            var counter = period.Where(x => MonitoringRules.FormShape(x.Input.ServiceId) == MonitoringFormShape.Counter).ToArray();
+            var received = counter.Sum(x => x.Input.Received);
+            var completed = counter.Sum(x => x.Input.Completed);
+            var workDone = period.Where(x => MonitoringRules.IsFieldWork(x.Input.ServiceId)).Sum(x => x.Input.Completed);
             var sla = period.Sum(x => x.Input.SlaWithinTime);
             long pending = 0, complaints = 0, field = 0;
             foreach (var balance in setup.Balances.Where(x => !filter.ServiceId.HasValue || x.ServiceId == filter.ServiceId))
@@ -231,7 +236,8 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 var closing = filter.To < setup.StartDate ? new Balances(0, 0, 0)
                     : entries.Where(x => x.Input.ServiceId == balance.ServiceId && x.Input.ServiceDate <= filter.To)
                         .OrderBy(x => x.Input.ServiceDate).LastOrDefault()?.Closing ?? balance.Opening;
-                pending += closing.Service; complaints += closing.Complaints; field += closing.Field;
+                if (MonitoringRules.FormShape(balance.ServiceId) == MonitoringFormShape.Counter) pending += closing.Service;
+                complaints += closing.Complaints; field += closing.Field;
             }
             double? disposalPct = received == 0 ? null : (double)completed / received * 100;
             double? slaPct = completed == 0 ? null : (double)sla / completed * 100;
@@ -240,11 +246,8 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             var reasons = new List<string>();
             if (pending > 10) reasons.Add("Pending > 10");
             if (disposalPct < 90) reasons.Add("Disposal < 90%");
-            if (slaPct < 90) reasons.Add("SLA < 90%");
-            if (complaints > 5) reasons.Add("Complaints pending > 5");
-            if (field > 10) reasons.Add("Field tasks pending > 10");
             rows.Add(new(office.Id, office.Code, received, completed, sla, pending, disposalPct, slaPct,
-                period.Sum(x => x.Input.AmountPaise), complaints, field, period.Count, expected, true, reasons));
+                period.Sum(x => x.Input.AmountPaise), complaints, field, period.Count, expected, true, reasons, workDone));
         }
         return Read(new DashboardDto(rows), LastUpdated(audits));
     });
