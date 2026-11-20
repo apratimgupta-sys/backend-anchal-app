@@ -33,11 +33,10 @@ public sealed class MonitoringRulesTests
     }
 
     [Fact]
-    public void RejectsInvalidCountsAndMissingCompletionDays()
+    public void RejectsInvalidCounts()
     {
         foreach (var input in new[] {
-            Entry(new(2026, 10, 6)) with { Received = -1 },
-            Entry(new(2026, 10, 6)) with { Completed = 1, AvgDisposalDays = null } })
+            Entry(new(2026, 10, 6)) with { Received = -1 } })
             Assert.NotEmpty(Assert.Throws<MonitoringRuleException>(() =>
                 MonitoringRules.ValidateEntry(input, new(2026, 10, 6))).Error.FieldErrors!);
     }

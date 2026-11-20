@@ -45,15 +45,35 @@ public sealed class FieldWorkEntryRulesTests
     }
 
     [Theory]
-    [MemberData(nameof(NotFieldWork))]
-    public void CounterWorkStillNeedsAverageDaysWhenSomethingWasFinished(int serviceId)
+    [InlineData(1)]
+    [InlineData(12)]
+    [InlineData(25)]
+    public void ACounterEntryWithNoAverageDaysIsAccepted(int serviceId)
     {
-        var entry = Entry(serviceId) with { Received = 5, Completed = 5, AvgDisposalDays = null };
+        var entry = new EntryInput(serviceId, Today, "24", 5, 3, 0, 0, 0, 0, 0, 0, null, "");
+
+        MonitoringRules.ValidateEntry(entry, Today);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(100001)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void ASuppliedAverageDaysMustStillBeFiniteAndInRange(double days)
+    {
+        var entry = Entry(1) with { Received = 5, Completed = 3, AvgDisposalDays = days };
 
         var error = Assert.Throws<MonitoringRuleException>(
             () => MonitoringRules.ValidateEntry(entry, Today));
 
         Assert.True(error.Error.FieldErrors!.ContainsKey("avgDisposalDays"));
+    }
+
+    [Fact]
+    public void ASuppliedInRangeAverageDaysIsStillAccepted()
+    {
+        MonitoringRules.ValidateEntry(Entry(1) with { Received = 5, Completed = 3, AvgDisposalDays = 2.5 }, Today);
     }
 
     [Fact]
