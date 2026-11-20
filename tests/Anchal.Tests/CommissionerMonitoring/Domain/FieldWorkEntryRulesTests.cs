@@ -19,10 +19,6 @@ public sealed class FieldWorkEntryRulesTests
     // drain, grass cutting, tree pruning, water body cleaning.
     public static TheoryData<int> FieldWork => new(8, 9, 10, 13, 14, 15, 16, 17);
 
-    // Applications, licences, registrations, beneficiaries, bookings, revenue.
-    public static TheoryData<int> NotFieldWork =>
-        new(1, 2, 3, 4, 5, 6, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
-
     // Counter shape: everything that is neither field work nor revenue (2, 5, 6).
     public static TheoryData<int> CounterShape =>
         new(1, 3, 4, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
@@ -36,8 +32,12 @@ public sealed class FieldWorkEntryRulesTests
         MonitoringRules.ValidateEntry(entry, Today);
     }
 
+    /// Was asserted for all 17 non-field-work services; the three revenue
+    /// services left it when the revenue shape stopped collecting a disposal
+    /// figure — the rule's `completed` operand is not a question the office is
+    /// asked there, so enforcing it only dead-ends a correction.
     [Theory]
-    [MemberData(nameof(NotFieldWork))]
+    [MemberData(nameof(CounterShape))]
     public void CounterWorkStillCannotFinishMoreThanItReceived(int serviceId)
     {
         var entry = Entry(serviceId) with { Completed = 5, Received = 0, AvgDisposalDays = 2 };

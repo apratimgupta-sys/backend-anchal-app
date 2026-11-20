@@ -41,7 +41,33 @@ public static class MonitoringRules
 
     public static bool IsFieldWork(int serviceId) => FormShape(serviceId) == MonitoringFormShape.FieldWork;
 
-    public static void ValidateEntry(EntryInput input, DateOnly today) { var errors = new Dictionary<string, string>(); foreach (var (name, value) in new (string, long)[] { ("received", input.Received), ("completed", input.Completed), ("slaWithinTime", input.SlaWithinTime), ("amountPaise", input.AmountPaise), ("complaintsReceived", input.ComplaintsReceived), ("complaintsResolved", input.ComplaintsResolved), ("fieldReceived", input.FieldReceived), ("fieldCompleted", input.FieldCompleted) }) if (value is < 0 or > 1_000_000_000) errors[name] = "Enter a nonnegative whole number within the allowed limit"; if (input.ServiceId is < 1 or > 25) errors["serviceId"] = "Select a service"; if (input.ServiceDate == default || input.ServiceDate > today) errors["serviceDate"] = "Enter a valid date through today"; if (string.IsNullOrWhiteSpace(input.Ward) || input.Ward.Length > 200) errors["ward"] = "Enter ward number/name (maximum 200 characters)"; if (input.Remarks is null || input.Remarks.Length > 2000) errors["remarks"] = "Remarks must be at most 2000 characters"; if (input.SlaWithinTime > input.Completed) errors["slaWithinTime"] = "Cannot exceed completed cases"; if (!IsFieldWork(input.ServiceId) && input.Completed > input.Received) errors["completed"] = "Completed cannot exceed received"; if (input.ComplaintsResolved > input.ComplaintsReceived) errors["complaintsResolved"] = "Resolved complaints cannot exceed received"; if (input.FieldCompleted > input.FieldReceived) errors["fieldCompleted"] = "Completed field tasks cannot exceed received"; if (input.AvgDisposalDays is double days && (!double.IsFinite(days) || days < 0 || days > 100000)) errors["avgDisposalDays"] = "Enter valid average days"; if (input.NothingToReport && !input.IsZeroActivity) errors["nothingToReport"] = "Nothing to report cannot be combined with reported figures"; if (errors.Count > 0) throw new MonitoringRuleException(422, new("VALIDATION", "Please correct the highlighted fields", errors)); }
+    // What the daily form actually asks a service for, by shape: two numbers
+    // instead of nine. Everything else in the record is retired — kept for the
+    // entries already filed with it, collected from nobody.
+    private static readonly string[] CounterFields = ["received", "completed"];
+    private static readonly string[] RevenueFields = ["received", "amountPaise"];
+    private static readonly string[] FieldWorkFields = ["completed"];
+
+    public static IReadOnlyList<string> CollectedFields(int serviceId) => FormShape(serviceId) switch
+    {
+        MonitoringFormShape.Revenue => RevenueFields,
+        MonitoringFormShape.FieldWork => FieldWorkFields,
+        _ => CounterFields,
+    };
+
+    // A cross-field rule can only be acted on if the office is asked for BOTH
+    // of its operands. Keyed to anything else, a 422 dead-ends a correction:
+    // the message names a field the form does not render, so the office sees
+    // "Please correct the highlighted fields" with nothing highlighted and no
+    // way to save. The retired fields keep their stored values through a
+    // correction, so their consistency is preserved by construction.
+    public static bool Collects(int serviceId, params string[] fields)
+    {
+        var collected = CollectedFields(serviceId);
+        return fields.All(collected.Contains);
+    }
+
+    public static void ValidateEntry(EntryInput input, DateOnly today) { var errors = new Dictionary<string, string>(); foreach (var (name, value) in new (string, long)[] { ("received", input.Received), ("completed", input.Completed), ("slaWithinTime", input.SlaWithinTime), ("amountPaise", input.AmountPaise), ("complaintsReceived", input.ComplaintsReceived), ("complaintsResolved", input.ComplaintsResolved), ("fieldReceived", input.FieldReceived), ("fieldCompleted", input.FieldCompleted) }) if (value is < 0 or > 1_000_000_000) errors[name] = "Enter a nonnegative whole number within the allowed limit"; if (input.ServiceId is < 1 or > 25) errors["serviceId"] = "Select a service"; if (input.ServiceDate == default || input.ServiceDate > today) errors["serviceDate"] = "Enter a valid date through today"; if (string.IsNullOrWhiteSpace(input.Ward) || input.Ward.Length > 200) errors["ward"] = "Enter ward number/name (maximum 200 characters)"; if (input.Remarks is null || input.Remarks.Length > 2000) errors["remarks"] = "Remarks must be at most 2000 characters"; if (Collects(input.ServiceId, "slaWithinTime", "completed") && input.SlaWithinTime > input.Completed) errors["slaWithinTime"] = "Cannot exceed completed cases"; if (Collects(input.ServiceId, "completed", "received") && input.Completed > input.Received) errors["completed"] = "Completed cannot exceed received"; if (Collects(input.ServiceId, "complaintsResolved", "complaintsReceived") && input.ComplaintsResolved > input.ComplaintsReceived) errors["complaintsResolved"] = "Resolved complaints cannot exceed received"; if (Collects(input.ServiceId, "fieldCompleted", "fieldReceived") && input.FieldCompleted > input.FieldReceived) errors["fieldCompleted"] = "Completed field tasks cannot exceed received"; if (input.AvgDisposalDays is double days && (!double.IsFinite(days) || days < 0 || days > 100000)) errors["avgDisposalDays"] = "Enter valid average days"; if (input.NothingToReport && !input.IsZeroActivity) errors["nothingToReport"] = "Nothing to report cannot be combined with reported figures"; if (errors.Count > 0) throw new MonitoringRuleException(422, new("VALIDATION", "Please correct the highlighted fields", errors)); }
     public static IReadOnlyList<DerivedEntry> Derive(Balances initial, IEnumerable<EntryInput> entries) { var balance = initial; var result = new List<DerivedEntry>(); foreach (var input in entries.OrderBy(x => x.ServiceDate)) { var opening = balance; // Only counter-shape work has a queue. Field work (grass is cut, a route is fogged) and
             // revenue (payments land in Received, nothing is completed) have none. Counting them
             // into the service balance drove the balance negative and was rejected
