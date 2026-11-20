@@ -217,7 +217,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             if (setup is null)
             {
                 rows.Add(new(office.Id, office.Code, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, false,
-                    ["Initial balances not configured"]));
+                    ["Initial balances not configured"], 0));
                 continue;
             }
             var entries = Views(setup, all.Where(x => x.OfficeId == office.Id).ToArray());
@@ -229,7 +229,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             var received = counter.Sum(x => x.Input.Received);
             var completed = counter.Sum(x => x.Input.Completed);
             var workDone = period.Where(x => MonitoringRules.IsFieldWork(x.Input.ServiceId)).Sum(x => x.Input.Completed);
-            var sla = period.Sum(x => x.Input.SlaWithinTime);
+            var sla = counter.Sum(x => x.Input.SlaWithinTime);
             long pending = 0, complaints = 0, field = 0;
             foreach (var balance in setup.Balances.Where(x => !filter.ServiceId.HasValue || x.ServiceId == filter.ServiceId))
             {

@@ -67,6 +67,18 @@ public sealed class DashboardShapeTests
         Assert.Empty(row.ReviewReasons);
     }
 
+    // Break caught: sla summed all 25 services while slaPct divides by counter-only completed, so a pre-cutover revenue
+    // or field-work entry carrying slaWithinTime (40 + 40 here) pushed the percentage to 85/5 = 1700% and into the sla figure.
+    [Fact]
+    public async Task SlaCountsOnlyTheCounterShapeAndNeverExceedsOneHundred()
+    {
+        await using var f = await Fixture.Create(counterSla: 5, legacySla: 40);
+        var row = await f.Row(Day1, Day1);
+        Assert.Equal(5, row.SlaWithinTime);
+        Assert.Equal(100, row.SlaPct);
+        Assert.True(row.SlaPct <= 100);
+    }
+
     // Break caught: the surviving reasons must keep firing, on counter pending only, with their English text unchanged
     // (i18n.tsx matches them by exact key).
     [Fact]
@@ -112,7 +124,7 @@ public sealed class DashboardShapeTests
         }
 
         public static async Task<Fixture> Create(long counterOpening = 4, long counterReceived = 10, long counterCompleted = 5,
-            long legacyComplaints = 0, long legacyField = 0)
+            long legacyComplaints = 0, long legacyField = 0, long counterSla = 0, long legacySla = 0)
         {
             var f = new Fixture();
             f.Db.Offices.Add(new MonitoringOffice { Id = f.office, Code = "anchal1", Name = "Anchal 1" });
@@ -130,9 +142,9 @@ public sealed class DashboardShapeTests
             var setup = await f.Service.SaveSetupAsync(Principal(f.user, f.office), new("setup-request", null, Day1, openings));
             Assert.True(setup.IsSuccess, setup.Error?.Message);
 
-            await f.Save(new(1, Day1, "1", counterReceived, counterCompleted, 0, 0, legacyComplaints, 0, legacyField, 0, null, ""));
-            await f.Save(new(2, Day1, "1", 3, 0, 0, 900, 0, 0, 0, 0, null, ""));
-            await f.Save(new(8, Day1, "1", 0, 7, 0, 0, 0, 0, 0, 0, null, ""));
+            await f.Save(new(1, Day1, "1", counterReceived, counterCompleted, counterSla, 0, legacyComplaints, 0, legacyField, 0, null, ""));
+            await f.Save(new(2, Day1, "1", 3, 0, legacySla, 900, 0, 0, 0, 0, null, ""));
+            await f.Save(new(8, Day1, "1", 0, 7, legacySla, 0, 0, 0, 0, 0, null, ""));
             await f.Save(new(9, Day1, "1", 0, 3, 0, 0, 0, 0, 0, 0, null, ""));
             await f.Save(new(8, Day2, "1", 0, 100, 0, 0, 0, 0, 0, 0, null, ""));
             return f;
