@@ -223,6 +223,27 @@ public sealed class MonitoringServiceTests
         Assert.Empty(await f.Db.AuditEvents.ToListAsync());
     }
 
+    // Break caught: the flag being lost between saving an entry and reading it back from the audit snapshot.
+    [Fact]
+    public async Task NothingToReportIsPersistedAndReadBackPerService()
+    {
+        await using var f = await Fixture.Create();
+        await f.Setup();
+        var command = Save(new(2026, 10, 6));
+        var flagged = (await f.Service.SaveEntryAsync(f.Principal, command with {
+            Input = command.Input with { NothingToReport = true } })).Value!;
+        Assert.True(flagged.Input.NothingToReport);
+        var typedZeros = await f.Service.SaveEntryAsync(f.Principal, command with {
+            RequestId = "service-two", Input = command.Input with { ServiceId = 2 } });
+        Assert.True(typedZeros.IsSuccess);
+        var read = (await f.Service.GetEntriesAsync(f.Principal, "today", new(2026, 10, 6))).Value!;
+        Assert.True(read.Data.Entries.Single(x => x.Input.ServiceId == 1).Input.NothingToReport);
+        Assert.False(read.Data.Entries.Single(x => x.Input.ServiceId == 2).Input.NothingToReport);
+        var audit = await f.Db.AuditEvents.SingleAsync(x => x.AggregateId == flagged.Id);
+        using var snapshot = JsonDocument.Parse(audit.AfterJson);
+        Assert.Equal(1, snapshot.RootElement.GetProperty("schemaVersion").GetInt32());
+    }
+
     [Fact]
     public async Task ZeroSubmissionAndAnotherServiceRemainIndependent()
     {

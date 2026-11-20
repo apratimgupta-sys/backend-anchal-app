@@ -250,6 +250,38 @@ public sealed class MonitoringEndpointTests
         Assert.Equal((HttpStatusCode)422, response.StatusCode);
     }
 
+    // Break caught: the adapter flattens input onto the entry and skips "isZeroActivity"; a flag named
+    // like that would be stripped from every response while service-level tests still passed.
+    [Fact]
+    public async Task NothingToReportReachesTheClientOnTheFlattenedEntry()
+    {
+        await using var host = await Host.Create();
+        using (var login = await host.Login()) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")).DateTime).ToString("yyyy-MM-dd");
+        var balances = string.Join(",", Enumerable.Range(1, 25).Select(x =>
+            "{\"serviceId\":" + x + ",\"opening\":{\"service\":0,\"complaints\":0,\"field\":0}}"));
+        using var setup = new HttpRequestMessage(HttpMethod.Put, Root + "/office/setup")
+        { Content = new StringContent("{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"startDate\":\""
+            + today + "\",\"balances\":[" + balances + "]}", System.Text.Encoding.UTF8, "application/json") };
+        setup.Headers.Add("Origin", AllowedOrigin);
+        using (var setupResponse = await host.Client.SendAsync(setup)) Assert.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"mode\":\"today\",\"reason\":null,"
+            + "\"input\":{\"serviceId\":1,\"serviceDate\":\"" + today + "\",\"ward\":\"W1\",\"received\":0,\"completed\":0,"
+            + "\"slaWithinTime\":0,\"amountPaise\":0,\"complaintsReceived\":0,\"complaintsResolved\":0,\"fieldReceived\":0,"
+            + "\"fieldCompleted\":0,\"avgDisposalDays\":null,\"remarks\":\"\",\"nothingToReport\":true}}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/office/entries")
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", AllowedOrigin);
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        using var saved = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(saved.RootElement.GetProperty("nothingToReport").GetBoolean());
+        Assert.False(saved.RootElement.TryGetProperty("isZeroActivity", out _));
+    }
+
     private sealed class Host(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client => client;
