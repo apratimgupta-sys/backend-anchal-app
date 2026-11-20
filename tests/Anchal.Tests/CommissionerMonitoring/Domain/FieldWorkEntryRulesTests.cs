@@ -23,6 +23,10 @@ public sealed class FieldWorkEntryRulesTests
     public static TheoryData<int> NotFieldWork =>
         new(1, 2, 3, 4, 5, 6, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
 
+    // Counter shape: everything that is neither field work nor revenue (2, 5, 6).
+    public static TheoryData<int> CounterShape =>
+        new(1, 3, 4, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
+
     [Theory]
     [MemberData(nameof(FieldWork))]
     public void WorkDoneWithNoRequestBehindItIsAccepted(int serviceId)
@@ -112,7 +116,7 @@ public sealed class FieldWorkEntryRulesTests
     }
 
     [Theory]
-    [MemberData(nameof(NotFieldWork))]
+    [MemberData(nameof(CounterShape))]
     public void CounterWorkStillMovesThePendingBalance(int serviceId)
     {
         var entry = Entry(serviceId) with { Received = 5, Completed = 2, AvgDisposalDays = 1 };
@@ -145,4 +149,35 @@ public sealed class FieldWorkEntryRulesTests
     [Fact] public void RevenueIsExactlyTheThreePaymentServices() =>
         Assert.Equal(new[] { 2, 5, 6 },
             Enumerable.Range(1, 25).Where(x => MonitoringRules.FormShape(x) == MonitoringFormShape.Revenue));
+    [Theory] [InlineData(2)] [InlineData(5)] [InlineData(6)]
+    public void AMonthOfPaymentsDoesNotGrowThePendingBalance(int serviceId) {
+        var entries = Enumerable.Range(1, 30).Select(d =>
+            new EntryInput(serviceId, new(2026, 11, d), "24", 40, 0, 0, 500_00, 0, 0, 0, 0, null, ""));
+        var derived = MonitoringRules.Derive(new Balances(0, 0, 0), entries);
+        Assert.Equal(0, derived[^1].Closing.Service); }
+
+    [Fact] public void TheGrievanceServiceStillMovesTheBalance() {
+        var entry = new EntryInput(12, Today, "24", 5, 2, 0, 0, 0, 0, 0, 0, null, "");
+        Assert.Equal(3, Assert.Single(MonitoringRules.Derive(new Balances(0, 0, 0), [entry])).Closing.Service); }
+
+    // Derive runs at read time, so this change re-derives EXISTING history.
+    // These two tests pin that on purpose: a revenue entry that once inflated the
+    // closing balance (received 40, completed 0) now leaves it at the opening;
+    // counter entries keep their old closing balance exactly.
+    [Theory] [InlineData(2)] [InlineData(5)] [InlineData(6)]
+    public void HistoricRevenueEntryWithReceivedAndNoCompletedKeepsClosingEqualToOpening(int serviceId) {
+        var entry = new EntryInput(serviceId, Today, "24", 40, 0, 0, 0, 0, 0, 0, 0, null, "");
+        var derived = Assert.Single(MonitoringRules.Derive(new Balances(7, 0, 0), [entry]));
+        Assert.Equal(7, derived.Opening.Service);
+        Assert.Equal(derived.Opening.Service, derived.Closing.Service); }
+
+    [Theory] [InlineData(1)] [InlineData(12)] [InlineData(25)]
+    public void HistoricCounterEntryClosingBalanceIsNotAffected(int serviceId) {
+        var entry = new EntryInput(serviceId, Today, "24", 40, 15, 0, 0, 0, 0, 0, 0, null, "");
+        var derived = Assert.Single(MonitoringRules.Derive(new Balances(7, 0, 0), [entry]));
+        Assert.Equal(32, derived.Closing.Service); }
+
+    [Fact] public void CounterServiceWhoseBalanceWouldGoNegativeIsStillRejected() {
+        var entry = new EntryInput(1, Today, "24", 0, 5, 0, 0, 0, 0, 0, 0, null, "");
+        Assert.Throws<MonitoringRuleException>(() => MonitoringRules.Derive(new Balances(0, 0, 0), [entry])); }
 }
