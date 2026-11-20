@@ -110,4 +110,19 @@ public sealed class FieldWorkEntryRulesTests
 
         Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(entry, Today));
     }
+
+    [Fact] public void GrievanceServiceTakesTheCounterShapeAndMovesTheBalance() {
+        Assert.Equal(MonitoringFormShape.Counter, MonitoringRules.FormShape(12));
+        Assert.True(MonitoringRules.MovesPendingBalance(12)); }
+
+    [Fact] public void ShapesCoverAllTwentyFiveServicesWithTheExpectedCounts() {
+        var byShape = Enumerable.Range(1, 25).GroupBy(MonitoringRules.FormShape)
+            .ToDictionary(g => g.Key, g => g.Count());
+        Assert.Equal(14, byShape[MonitoringFormShape.Counter]);
+        Assert.Equal(3, byShape[MonitoringFormShape.Revenue]);
+        Assert.Equal(8, byShape[MonitoringFormShape.FieldWork]); }
+
+    [Fact] public void RevenueIsExactlyTheThreePaymentServices() =>
+        Assert.Equal(new[] { 2, 5, 6 },
+            Enumerable.Range(1, 25).Where(x => MonitoringRules.FormShape(x) == MonitoringFormShape.Revenue));
 }
