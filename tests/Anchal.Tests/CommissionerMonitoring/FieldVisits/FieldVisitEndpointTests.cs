@@ -52,7 +52,7 @@ public sealed class FieldVisitEndpointTests
         Assert.Equal(24, visit.GetProperty("ward").GetInt32());
         Assert.Equal("A. Kumar", visit.GetProperty("officerName").GetString());
         Assert.Equal("Junior Engineer", visit.GetProperty("officerDesignation").GetString());
-        Assert.True(visit.GetProperty("verifiedOnSite").GetBoolean());
+        Assert.False(visit.TryGetProperty("verifiedOnSite", out _));
         Assert.False(string.IsNullOrWhiteSpace(visit.GetProperty("receivedAt").GetString()));
         Assert.Equal(JsonValueKind.Null, visit.GetProperty("voidedAt").ValueKind);
     }
@@ -138,7 +138,7 @@ public sealed class FieldVisitEndpointTests
     }
 
     [Fact]
-    public async Task AKilometreWideFixIsStoredButNotTreatedAsOnSite()
+    public async Task AKilometreWideFixIsStoredAsReported()
     {
         await using var host = await Create();
         await host.SignInAsOfficer();
@@ -147,19 +147,7 @@ public sealed class FieldVisitEndpointTests
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(visit.GetProperty("verifiedOnSite").GetBoolean());
-    }
-
-    [Fact]
-    public async Task AFixCapturedHoursEarlierIsStoredButNotTreatedAsOnSite()
-    {
-        await using var host = await Create();
-        await host.SignInAsOfficer();
-
-        using var response = await Post(host, Input(capturedAt: DateTimeOffset.UtcNow.AddHours(-3)));
-
-        var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(visit.GetProperty("verifiedOnSite").GetBoolean());
+        Assert.Equal(5000, visit.GetProperty("gps").GetProperty("accuracyMetres").GetDouble());
     }
 
     [Fact]

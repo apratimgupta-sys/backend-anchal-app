@@ -28,6 +28,9 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
 
     public HttpClient Client => client;
 
+    /// The app's root services, for a test that must plant a row the API cannot write.
+    public IServiceProvider Services => app.Services;
+
     public Task<HttpResponseMessage> Login(string username, string password = SeedPassword) =>
         client.PostAsync(Root + "/login", Json(new { username, password }));
 

@@ -47,7 +47,7 @@ public sealed record SaveFieldVisitCommand(string RequestId, FieldVisitInputDto 
 // does everywhere else; VisitTime is HH:mm, the form's own shape.
 public sealed record FieldVisitDto(Guid Id, DateOnly VisitDate, string VisitTime, Guid OfficeId, int Ward,
     int ServiceId, GpsReadingDto Gps, string IssueAction, Guid OfficerId, string OfficerName,
-    string OfficerDesignation, DateTimeOffset ReceivedAt, bool VerifiedOnSite,
+    string OfficerDesignation, DateTimeOffset ReceivedAt,
     DateTimeOffset? VoidedAt, string? VoidReason);
 public sealed record FieldVisitPageDto(IReadOnlyList<FieldVisitDto> Rows, int Total);
 public sealed record FieldVisitFilter(DateOnly From, DateOnly To, int? OfficeId, int? Ward, int? ServiceId,

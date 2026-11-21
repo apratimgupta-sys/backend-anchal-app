@@ -17,8 +17,6 @@ public sealed class MonitoringFieldVisitService(
     IMonitoringService monitoring,
     TimeProvider clock) : IMonitoringFieldVisitService
 {
-    public const int AccuracyMetresLimit = 100;
-    public const int CaptureWindowMinutes = 30;
     public const int IssueActionMinimumLength = 20;
     // Matches the IssueAction column width in CommissionerMonitoringDbContext.
     public const int IssueActionMaximumLength = 4000;
@@ -53,7 +51,6 @@ public sealed class MonitoringFieldVisitService(
                 x => x.Code == "anchal" + input.OfficeId.ToString(CultureInfo.InvariantCulture) && x.IsActive, ct)
                 ?? throw Validation("officeId", "Select an active Anchal");
 
-            var verified = Verified(input.Gps, now);
             var visit = new MonitoringFieldVisit
             {
                 Id = Guid.NewGuid(),
@@ -70,7 +67,6 @@ public sealed class MonitoringFieldVisitService(
                 AccuracyMetres = input.Gps.AccuracyMetres,
                 GpsCapturedAt = input.Gps.CapturedAt,
                 ReceivedAt = now,
-                VerifiedOnSite = verified,
                 IssueAction = input.IssueAction.Trim()
             };
             db.FieldVisits.Add(visit);
@@ -172,21 +168,13 @@ public sealed class MonitoringFieldVisitService(
         if (issueAction.Length > IssueActionMaximumLength)
             throw Validation("issueAction",
                 $"Shorten this to {IssueActionMaximumLength} characters or fewer");
-        // A coarse fix is allowed through and stored unverified (spec 7.3); an
-        // impossible one is refused here, because the database refuses it too
+        // A coarse or late fix is stored as it came; the product passes no
+        // verdict on it. An impossible one is refused here, because the database refuses it too
         // and that arrives as an unrecoverable 500.
         if (input.Gps is null || !double.IsFinite(input.Gps.Latitude) || !double.IsFinite(input.Gps.Longitude) ||
             !double.IsFinite(input.Gps.AccuracyMetres) || input.Gps.AccuracyMetres < 0 ||
             input.Gps.Latitude is < -90 or > 90 || input.Gps.Longitude is < -180 or > 180)
             throw Validation("gps", "Capture the location at the site");
-    }
-
-    // Accuracy first, then freshness: a coarse fix is not made good by arriving quickly.
-    private static bool Verified(GpsReadingDto gps, DateTimeOffset receivedAt)
-    {
-        if (!double.IsFinite(gps.AccuracyMetres) || gps.AccuracyMetres < 0 ||
-            gps.AccuracyMetres > AccuracyMetresLimit) return false;
-        return Math.Abs((receivedAt - gps.CapturedAt).TotalMinutes) <= CaptureWindowMinutes;
     }
 
     private async Task<FieldVisitDto> Dto(MonitoringFieldVisit visit, CancellationToken ct)
@@ -196,7 +184,7 @@ public sealed class MonitoringFieldVisitService(
             visit.OfficeId, visit.Ward, visit.ServiceId,
             new GpsReadingDto(visit.Latitude, visit.Longitude, visit.AccuracyMetres, visit.GpsCapturedAt),
             visit.IssueAction, visit.OfficerUserId, officer.DisplayName, officer.Designation ?? string.Empty,
-            visit.ReceivedAt, visit.VerifiedOnSite, visit.VoidedAt, visit.VoidReason);
+            visit.ReceivedAt, visit.VoidedAt, visit.VoidReason);
     }
 
     private async Task<SessionDto> Session(ClaimsPrincipal principal, CancellationToken ct, string? requiredRole = null)

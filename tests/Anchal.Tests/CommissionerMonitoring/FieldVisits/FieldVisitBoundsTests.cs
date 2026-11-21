@@ -127,19 +127,6 @@ public sealed class FieldVisitBoundsTests
     }
 
     [Fact]
-    public async Task ACoarseButPossibleAccuracyIsStoredUnverifiedRatherThanRefused()
-    {
-        await using var host = await Create();
-        await host.SignInAsOfficer();
-
-        using var response = await Post(host, Input(accuracyMetres: 5000));
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(visit.GetProperty("verifiedOnSite").GetBoolean());
-    }
-
-    [Fact]
     public async Task AVisitTimeLaterThanNowIsRefused()
     {
         await using var host = await Create();
