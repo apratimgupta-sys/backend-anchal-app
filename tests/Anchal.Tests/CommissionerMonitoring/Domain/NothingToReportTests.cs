@@ -70,34 +70,56 @@ public sealed class NothingToReportTests
     private static EntryInput Entry(Func<EntryInput, EntryInput>? change = null) =>
         (change ?? (x => x))(new EntryInput(1, Today, "24", 0, 0, 0, 0, 0, 0, 0, 0, null, "", NothingToReport: true));
 
-    // Break caught: "the office said nothing happened" persisted next to figures, leaving downstream
-    // consumers to guess which side is true.
-    [Theory]
-    [InlineData("received")]
-    [InlineData("completed")]
-    [InlineData("slaWithinTime")]
-    [InlineData("amountPaise")]
-    [InlineData("complaintsReceived")]
-    [InlineData("complaintsResolved")]
-    [InlineData("fieldReceived")]
-    [InlineData("fieldCompleted")]
-    public void NothingToReportWithAnyFigureIsRejectedOnTheFlagField(string figure)
-    {
-        var input = Entry(x => figure switch
+    private static EntryInput Figure(int serviceId, string figure, long value = 1) =>
+        Entry(x => (x with { ServiceId = serviceId }) switch
         {
-            "received" => x with { Received = 1 },
-            "completed" => x with { Completed = 1 },
-            "slaWithinTime" => x with { SlaWithinTime = 1 },
-            "amountPaise" => x with { AmountPaise = 1 },
-            "complaintsReceived" => x with { ComplaintsReceived = 1 },
-            "complaintsResolved" => x with { ComplaintsResolved = 1 },
-            "fieldReceived" => x with { FieldReceived = 1 },
-            _ => x with { FieldCompleted = 1 },
+            var y when figure == "received" => y with { Received = value },
+            var y when figure == "completed" => y with { Completed = value },
+            var y when figure == "slaWithinTime" => y with { SlaWithinTime = value },
+            var y when figure == "amountPaise" => y with { AmountPaise = value },
+            var y when figure == "complaintsReceived" => y with { ComplaintsReceived = value },
+            var y when figure == "complaintsResolved" => y with { ComplaintsResolved = value },
+            var y when figure == "fieldReceived" => y with { FieldReceived = value },
+            var y => y with { FieldCompleted = value },
         });
-        var ex = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(input, Today));
+
+    // Break caught: "the office said nothing happened" persisted next to a figure the office was
+    // asked for, leaving downstream consumers to guess which side is true. Each row names the
+    // service it applies to, because which figures count depends on the service's shape:
+    // 1 and 12 counter (12 is grievance by kind but counter by shape), 2 revenue, 8 field work.
+    [Theory]
+    [InlineData(1, "received")]
+    [InlineData(1, "completed")]
+    [InlineData(12, "received")]
+    [InlineData(12, "completed")]
+    [InlineData(2, "received")]
+    [InlineData(2, "amountPaise")]
+    [InlineData(8, "completed")]
+    public void NothingToReportWithACollectedFigureIsRejectedOnTheFlagField(int serviceId, string figure)
+    {
+        var ex = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(Figure(serviceId, figure), Today));
         Assert.Equal(422, ex.Status);
         Assert.True(ex.Error.FieldErrors!.ContainsKey("nothingToReport"));
     }
+
+    // Break caught: the flag rejected because of a retired figure the form no longer shows. Those
+    // keep their stored values through a correction, so "Set zero activity" on an old entry sends
+    // them non-zero, and a 422 here names a field with nothing to highlight.
+    [Theory]
+    [InlineData(1, "slaWithinTime")]
+    [InlineData(1, "complaintsReceived")]
+    [InlineData(1, "amountPaise")]
+    [InlineData(1, "fieldReceived")]
+    [InlineData(12, "complaintsReceived")]
+    [InlineData(12, "complaintsResolved")]
+    [InlineData(12, "slaWithinTime")]
+    [InlineData(2, "completed")]
+    [InlineData(2, "slaWithinTime")]
+    [InlineData(8, "received")]
+    [InlineData(8, "slaWithinTime")]
+    [InlineData(8, "amountPaise")]
+    public void NothingToReportWithARetiredFigureIsAccepted(int serviceId, string figure) =>
+        MonitoringRules.ValidateEntry(Figure(serviceId, figure), Today);
 
     [Fact]
     public void NothingToReportWithAllZerosIsAccepted() => MonitoringRules.ValidateEntry(Entry(), Today);
