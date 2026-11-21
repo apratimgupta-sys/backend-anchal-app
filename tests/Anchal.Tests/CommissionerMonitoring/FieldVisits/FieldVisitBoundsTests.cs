@@ -55,7 +55,10 @@ public sealed class FieldVisitBoundsTests
         using var refused = await Post(host, at);
         Assert.Equal(HttpStatusCode.UnprocessableContent, refused.StatusCode);
         var error = await refused.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(error.GetProperty("fieldErrors").TryGetProperty("input.ward", out _));
+        // The message is hardcoded beside a constant bound; pin it so a changed WardCount cannot leave
+        // the officer reading a range that is no longer true.
+        Assert.Equal("Select a ward from 1 to " + MonitoringRules.WardCount,
+            error.GetProperty("fieldErrors").GetProperty("input.ward").GetString());
     }
 
     private static Task<HttpResponseMessage> Post(MonitoringTestHost host, object input) =>
