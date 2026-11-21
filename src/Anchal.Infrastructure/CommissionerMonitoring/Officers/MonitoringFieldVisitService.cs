@@ -163,7 +163,7 @@ public sealed class MonitoringFieldVisitService(
         if (visitTime > TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Kolkata").DateTime))
             throw Validation("visitTime", "A visit cannot be recorded for a time later than now");
         if (input.OfficeId is < 1 or > 6) throw Validation("officeId", "Select an Anchal");
-        if (input.Ward is < 1 or > 53) throw Validation("ward", "Select a ward from 1 to 53");
+        if (input.Ward is < 1 or > MonitoringRules.WardCount) throw Validation("ward", "Select a ward from 1 to 53");
         if (input.ServiceId is < 1 or > 25) throw Validation("serviceId", "Select an activity");
         var issueAction = (input.IssueAction ?? string.Empty).Trim();
         if (issueAction.Length < IssueActionMinimumLength)

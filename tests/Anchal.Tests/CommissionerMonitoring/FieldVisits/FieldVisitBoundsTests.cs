@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Anchal.Domain.CommissionerMonitoring.Rules;
 using Xunit;
 using static Anchal.Tests.CommissionerMonitoring.FieldVisits.MonitoringTestHost;
 
@@ -34,6 +35,28 @@ public sealed class FieldVisitBoundsTests
         },
         issueAction = issueAction ?? "Fogging done along the main lane; two bylanes still pending."
     };
+
+    // Break caught: the field-visit ward bound drifting from the daily-entry one. Both must read
+    // MonitoringRules.WardCount, so the last ward is stored and the one after it is a field error.
+    [Fact]
+    public async Task TheFieldVisitWardBoundIsTheDailyEntryWardBound()
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+        var last = Input() is var i ? JsonSerializer.SerializeToElement(i) : default;
+        var at = new Dictionary<string, object?>();
+        foreach (var p in last.EnumerateObject()) at[p.Name] = p.Value.Clone();
+
+        at["ward"] = MonitoringRules.WardCount;
+        using var stored = await Post(host, at);
+        Assert.True(stored.IsSuccessStatusCode, await stored.Content.ReadAsStringAsync());
+
+        at["ward"] = MonitoringRules.WardCount + 1;
+        using var refused = await Post(host, at);
+        Assert.Equal(HttpStatusCode.UnprocessableContent, refused.StatusCode);
+        var error = await refused.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(error.GetProperty("fieldErrors").TryGetProperty("input.ward", out _));
+    }
 
     private static Task<HttpResponseMessage> Post(MonitoringTestHost host, object input) =>
         host.Client.PostAsync(Root2, Json(new { requestId = Guid.NewGuid().ToString("N"), input }));

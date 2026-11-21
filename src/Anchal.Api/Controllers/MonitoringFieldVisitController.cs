@@ -1,3 +1,4 @@
+using Anchal.Domain.CommissionerMonitoring.Rules;
 using System.Globalization;
 using Anchal.Api.CommissionerMonitoring;
 using Anchal.Application.CommissionerMonitoring.Auth;
@@ -52,7 +53,7 @@ public sealed class MonitoringFieldVisitController(
         var to = adapter.Date(query["to"].ToString(), "to", from);
         return new FieldVisitFilter(from, to,
             Bounded(query, "officeId", 1, 6),
-            Bounded(query, "ward", 1, 53),
+            Bounded(query, "ward", 1, MonitoringRules.WardCount),
             Bounded(query, "serviceId", 1, 25),
             query.ContainsKey("officerId") && Guid.TryParse(query["officerId"], out var officer) ? officer : null,
             Bounded(query, "page", 1, 10_000) ?? 1);

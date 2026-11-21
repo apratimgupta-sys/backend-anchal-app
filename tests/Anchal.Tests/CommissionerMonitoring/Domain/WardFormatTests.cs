@@ -20,13 +20,27 @@ public sealed class WardFormatTests
     [InlineData("Ward 1")]
     [InlineData("Ward 53")]
     [InlineData("Ward 11")]
+    // Surrounding whitespace is tolerated because MonitoringService trims the ward before it is
+    // stored, so these produce the same record as "Ward 11". Only the ends: internal spacing is not.
+    [InlineData(" Ward 11 ")]
+    [InlineData("Ward 11 ")]
+    [InlineData("\tWard 11")]
     public void AWardInTheCanonicalFormatIsAccepted(string ward)
     {
         MonitoringRules.ValidateEntry(Entry(ward), Today);
     }
 
-    // " Ward 11 " is rejected here on purpose: ValidateEntry sees the input before MonitoringService
-    // trims it, so the rule is exact. The picker cannot produce padding; a raw API client gets a 422.
+    // Break caught: the daily-entry bound drifting from the field-visit bound (both read
+    // MonitoringRules.WardCount; FieldVisitBoundsTests pins the other side).
+    [Fact]
+    public void TheLastWardIsTheOneTheBoundNames()
+    {
+        MonitoringRules.ValidateEntry(Entry($"Ward {MonitoringRules.WardCount}"), Today);
+        var ex = Assert.Throws<MonitoringRuleException>(() =>
+            MonitoringRules.ValidateEntry(Entry($"Ward {MonitoringRules.WardCount + 1}"), Today));
+        Assert.Equal(Message, ex.Error.FieldErrors!["ward"]);
+    }
+
     // Break caught: a looser rule that lets a second spelling of the same ward into the register.
     [Theory]
     [InlineData("Ward 0")]
@@ -35,8 +49,9 @@ public sealed class WardFormatTests
     [InlineData("Ward 011")]
     [InlineData("Ward 11, Konka")]
     [InlineData("Ward  11")]
-    [InlineData(" Ward 11 ")]
-    [InlineData("Ward 11 ")]
+    [InlineData(" ")]
+    [InlineData("  ")]
+    [InlineData("Ward  ")]
     [InlineData("11")]
     [InlineData("Ward")]
     [InlineData("")]

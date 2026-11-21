@@ -277,7 +277,7 @@ public sealed class MonitoringServiceTests
         var originalAudit = (await f.Db.AuditEvents.SingleAsync(x => x.Action == "Entry submitted")).AfterJson;
         f.Clock.Advance(TimeSpan.FromDays(1));
         var correction = command with { RequestId = "correct-entry", ExpectedVersion = 1,
-            Reason = "Register reconciled", Input = command.Input with { Received = 2, Ward = "Ward 2", Remarks = " note " } };
+            Reason = "Register reconciled", Input = command.Input with { Received = 2, Ward = " Ward 2 ", Remarks = " note " } };
         Assert.Equal(409, (await f.Service.SaveEntryAsync(f.Principal,
             correction with { ExpectedVersion = null }, original.Id)).Status);
         Assert.Equal(422, (await f.Service.SaveEntryAsync(f.Principal,
