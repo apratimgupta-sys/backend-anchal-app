@@ -12,6 +12,15 @@ public sealed class WardFormatTests
     private static readonly DateOnly Today = new(2026, 11, 20);
     private const string Message = "Select a ward from 1 to 53";
 
+    // Break caught: the bound changing while the message (an exact i18n key) still says 53.
+    [Fact]
+    public void TheMessageNamesTheBound()
+    {
+        Assert.Equal($"Select a ward from 1 to {MonitoringRules.WardCount}", Message);
+        var ex = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(Entry("Ward 0"), Today));
+        Assert.Equal($"Select a ward from 1 to {MonitoringRules.WardCount}", ex.Error.FieldErrors!["ward"]);
+    }
+
     private static EntryInput Entry(string ward) =>
         new(1, Today, ward, 0, 0, 0, 0, 0, 0, 0, 0, null, "");
 
@@ -52,6 +61,9 @@ public sealed class WardFormatTests
     [InlineData(" ")]
     [InlineData("  ")]
     [InlineData("Ward  ")]
+    // Devanagari digits: char.IsDigit would pass them and int.Parse would then throw (a 500, not a 422).
+    [InlineData("Ward ११")]
+    [InlineData("Ward ٣")]
     [InlineData("11")]
     [InlineData("Ward")]
     [InlineData("")]
