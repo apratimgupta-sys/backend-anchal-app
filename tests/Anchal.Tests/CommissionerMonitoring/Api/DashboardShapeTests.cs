@@ -142,11 +142,11 @@ public sealed class DashboardShapeTests
             var setup = await f.Service.SaveSetupAsync(Principal(f.user, f.office), new("setup-request", null, Day1, openings));
             Assert.True(setup.IsSuccess, setup.Error?.Message);
 
-            await f.Save(new(1, Day1, "1", counterReceived, counterCompleted, counterSla, 0, legacyComplaints, 0, legacyField, 0, null, ""));
-            await f.Save(new(2, Day1, "1", 3, 0, legacySla, 900, 0, 0, 0, 0, null, ""));
-            await f.Save(new(8, Day1, "1", 0, 7, legacySla, 0, 0, 0, 0, 0, null, ""));
-            await f.Save(new(9, Day1, "1", 0, 3, 0, 0, 0, 0, 0, 0, null, ""));
-            await f.Save(new(8, Day2, "1", 0, 100, 0, 0, 0, 0, 0, 0, null, ""));
+            await f.Save(new(1, Day1, "Ward 1", counterReceived, counterCompleted, counterSla, 0, legacyComplaints, 0, legacyField, 0, null, ""));
+            await f.Save(new(2, Day1, "Ward 1", 3, 0, legacySla, 900, 0, 0, 0, 0, null, ""));
+            await f.Save(new(8, Day1, "Ward 1", 0, 7, legacySla, 0, 0, 0, 0, 0, null, ""));
+            await f.Save(new(9, Day1, "Ward 1", 0, 3, 0, 0, 0, 0, 0, 0, null, ""));
+            await f.Save(new(8, Day2, "Ward 1", 0, 100, 0, 0, 0, 0, 0, 0, null, ""));
             return f;
         }
 

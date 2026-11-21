@@ -56,5 +56,5 @@ public sealed class MonitoringRulesTests
         MonitoringRules.ValidateEntry(Entry(new(2026, 10, 6)) with { Received = 2, Completed = 2, SlaWithinTime = 2, AvgDisposalDays = 1 }, new(2026, 10, 6));
     }
 
-    private static EntryInput Entry(DateOnly date) => new(1, date, "1", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
+    private static EntryInput Entry(DateOnly date) => new(1, date, "Ward 1", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
 }

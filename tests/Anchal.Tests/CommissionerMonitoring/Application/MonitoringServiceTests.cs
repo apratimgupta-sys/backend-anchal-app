@@ -277,7 +277,7 @@ public sealed class MonitoringServiceTests
         var originalAudit = (await f.Db.AuditEvents.SingleAsync(x => x.Action == "Entry submitted")).AfterJson;
         f.Clock.Advance(TimeSpan.FromDays(1));
         var correction = command with { RequestId = "correct-entry", ExpectedVersion = 1,
-            Reason = "Register reconciled", Input = command.Input with { Received = 2, Ward = " 2 ", Remarks = " note " } };
+            Reason = "Register reconciled", Input = command.Input with { Received = 2, Ward = "Ward 2", Remarks = " note " } };
         Assert.Equal(409, (await f.Service.SaveEntryAsync(f.Principal,
             correction with { ExpectedVersion = null }, original.Id)).Status);
         Assert.Equal(422, (await f.Service.SaveEntryAsync(f.Principal,
@@ -289,7 +289,7 @@ public sealed class MonitoringServiceTests
         Assert.Equal(original.ReportingDate, saved.ReportingDate);
         Assert.Equal(original.CreatedAt, saved.CreatedAt);
         Assert.Equal(f.Clock.GetUtcNow(), saved.UpdatedAt);
-        Assert.Equal("2", saved.Input.Ward);
+        Assert.Equal("Ward 2", saved.Input.Ward);
         Assert.Equal("note", saved.Input.Remarks);
         Assert.Equal(original.CreatedAt, (await f.Db.Reports.SingleAsync()).SubmittedAt);
         Assert.Equal(originalAudit, (await f.Db.AuditEvents.SingleAsync(x => x.Action == "Entry submitted")).AfterJson);
@@ -472,7 +472,7 @@ public sealed class MonitoringServiceTests
 
     private static SetupCommand Setup() => new("setup-request", null, new(2026, 10, 1),
         Enumerable.Range(1, 25).Select(x => new OpeningBalanceDto(x, x == 1 ? new(10, 3, 5) : new(0, 0, 0))).ToArray());
-    private static EntryInput Input(DateOnly date) => new(1, date, "1", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
+    private static EntryInput Input(DateOnly date) => new(1, date, "Ward 1", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
     private static SaveEntryCommand Save(DateOnly date, string mode = "today", string? reason = null) =>
         new("entry-request", null, mode, Input(date), reason);
 

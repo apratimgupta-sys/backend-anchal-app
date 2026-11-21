@@ -51,7 +51,7 @@ public sealed class NothingToReportTests
     [Fact]
     public void TheFlagSurvivesASerializeDeserializeRoundTrip()
     {
-        var input = new EntryInput(1, new(2026, 11, 1), "24", 0, 0, 0, 0, 0, 0, 0, 0, null, "", NothingToReport: true);
+        var input = new EntryInput(1, new(2026, 11, 1), "Ward 24", 0, 0, 0, 0, 0, 0, 0, 0, null, "", NothingToReport: true);
         var json = JsonSerializer.Serialize(input, Web);
         Assert.Contains("\"nothingToReport\":true", json);
         Assert.True(JsonSerializer.Deserialize<EntryInput>(json, Web)!.NothingToReport);
@@ -68,7 +68,7 @@ public sealed class NothingToReportTests
 
     private static readonly DateOnly Today = new(2026, 11, 20);
     private static EntryInput Entry(Func<EntryInput, EntryInput>? change = null) =>
-        (change ?? (x => x))(new EntryInput(1, Today, "24", 0, 0, 0, 0, 0, 0, 0, 0, null, "", NothingToReport: true));
+        (change ?? (x => x))(new EntryInput(1, Today, "Ward 24", 0, 0, 0, 0, 0, 0, 0, 0, null, "", NothingToReport: true));
 
     private static EntryInput Figure(int serviceId, string figure, long value = 1) =>
         Entry(x => (x with { ServiceId = serviceId }) switch

@@ -13,7 +13,7 @@ public sealed class FieldWorkEntryRulesTests
     private static readonly DateOnly Today = new(2026, 11, 20);
 
     private static EntryInput Entry(int serviceId) =>
-        new(serviceId, Today, "24", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
+        new(serviceId, Today, "Ward 24", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
 
     // Door-to-door vehicle, fogging, street dog, street lighting, road and
     // drain, grass cutting, tree pruning, water body cleaning.
@@ -54,7 +54,7 @@ public sealed class FieldWorkEntryRulesTests
     [InlineData(25)]
     public void ACounterEntryWithNoAverageDaysIsAccepted(int serviceId)
     {
-        var entry = new EntryInput(serviceId, Today, "24", 5, 3, 0, 0, 0, 0, 0, 0, null, "");
+        var entry = new EntryInput(serviceId, Today, "Ward 24", 5, 3, 0, 0, 0, 0, 0, 0, null, "");
 
         MonitoringRules.ValidateEntry(entry, Today);
     }
@@ -152,12 +152,12 @@ public sealed class FieldWorkEntryRulesTests
     [Theory] [InlineData(2)] [InlineData(5)] [InlineData(6)]
     public void AMonthOfPaymentsDoesNotGrowThePendingBalance(int serviceId) {
         var entries = Enumerable.Range(1, 30).Select(d =>
-            new EntryInput(serviceId, new(2026, 11, d), "24", 40, 0, 0, 500_00, 0, 0, 0, 0, null, ""));
+            new EntryInput(serviceId, new(2026, 11, d), "Ward 24", 40, 0, 0, 500_00, 0, 0, 0, 0, null, ""));
         var derived = MonitoringRules.Derive(new Balances(0, 0, 0), entries);
         Assert.Equal(0, derived[^1].Closing.Service); }
 
     [Fact] public void TheGrievanceServiceStillMovesTheBalance() {
-        var entry = new EntryInput(12, Today, "24", 5, 2, 0, 0, 0, 0, 0, 0, null, "");
+        var entry = new EntryInput(12, Today, "Ward 24", 5, 2, 0, 0, 0, 0, 0, 0, null, "");
         Assert.Equal(3, Assert.Single(MonitoringRules.Derive(new Balances(0, 0, 0), [entry])).Closing.Service); }
 
     // Derive runs at read time, so this change re-derives EXISTING history.
@@ -166,18 +166,18 @@ public sealed class FieldWorkEntryRulesTests
     // counter entries keep their old closing balance exactly.
     [Theory] [InlineData(2)] [InlineData(5)] [InlineData(6)]
     public void HistoricRevenueEntryWithReceivedAndNoCompletedKeepsClosingEqualToOpening(int serviceId) {
-        var entry = new EntryInput(serviceId, Today, "24", 40, 0, 0, 0, 0, 0, 0, 0, null, "");
+        var entry = new EntryInput(serviceId, Today, "Ward 24", 40, 0, 0, 0, 0, 0, 0, 0, null, "");
         var derived = Assert.Single(MonitoringRules.Derive(new Balances(7, 0, 0), [entry]));
         Assert.Equal(7, derived.Opening.Service);
         Assert.Equal(derived.Opening.Service, derived.Closing.Service); }
 
     [Theory] [InlineData(1)] [InlineData(12)] [InlineData(25)]
     public void HistoricCounterEntryClosingBalanceIsNotAffected(int serviceId) {
-        var entry = new EntryInput(serviceId, Today, "24", 40, 15, 0, 0, 0, 0, 0, 0, null, "");
+        var entry = new EntryInput(serviceId, Today, "Ward 24", 40, 15, 0, 0, 0, 0, 0, 0, null, "");
         var derived = Assert.Single(MonitoringRules.Derive(new Balances(7, 0, 0), [entry]));
         Assert.Equal(32, derived.Closing.Service); }
 
     [Fact] public void CounterServiceWhoseBalanceWouldGoNegativeIsStillRejected() {
-        var entry = new EntryInput(1, Today, "24", 0, 5, 0, 0, 0, 0, 0, 0, null, "");
+        var entry = new EntryInput(1, Today, "Ward 24", 0, 5, 0, 0, 0, 0, 0, 0, null, "");
         Assert.Throws<MonitoringRuleException>(() => MonitoringRules.Derive(new Balances(0, 0, 0), [entry])); }
 }

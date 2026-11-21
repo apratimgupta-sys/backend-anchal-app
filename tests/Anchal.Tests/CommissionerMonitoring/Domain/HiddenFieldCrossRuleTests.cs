@@ -20,7 +20,7 @@ public sealed class HiddenFieldCrossRuleTests
     // A pre-cutover entry: filed under the nine-field form, with figures in the
     // six fields the shapes no longer collect.
     private static EntryInput PreCutover(int serviceId) =>
-        new(serviceId, Today, "24", 7, 5, 4, 1234, 2, 1, 3, 3, 2.5, "filed before the cutover");
+        new(serviceId, Today, "Ward 24", 7, 5, 4, 1234, 2, 1, 3, 3, 2.5, "filed before the cutover");
 
     public static TheoryData<int> EveryService => new([.. Enumerable.Range(1, 25)]);
 

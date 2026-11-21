@@ -240,7 +240,7 @@ public sealed class MonitoringEndpointTests
         await using var host = await Host.Create();
         using (var login = await host.Login()) Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"mode\":\"today\",\"reason\":null,"
-            + "\"input\":{\"serviceId\":1,\"ward\":\"W1\",\"received\":" + received + "}}";
+            + "\"input\":{\"serviceId\":1,\"ward\":\"Ward 1\",\"received\":" + received + "}}";
         using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/office/entries")
         { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
         request.Headers.Add("Origin", AllowedOrigin);
@@ -267,7 +267,7 @@ public sealed class MonitoringEndpointTests
         setup.Headers.Add("Origin", AllowedOrigin);
         using (var setupResponse = await host.Client.SendAsync(setup)) Assert.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
         var body = "{\"requestId\":\"" + Guid.NewGuid() + "\",\"expectedVersion\":null,\"mode\":\"today\",\"reason\":null,"
-            + "\"input\":{\"serviceId\":1,\"serviceDate\":\"" + today + "\",\"ward\":\"W1\",\"received\":0,\"completed\":0,"
+            + "\"input\":{\"serviceId\":1,\"serviceDate\":\"" + today + "\",\"ward\":\"Ward 1\",\"received\":0,\"completed\":0,"
             + "\"slaWithinTime\":0,\"amountPaise\":0,\"complaintsReceived\":0,\"complaintsResolved\":0,\"fieldReceived\":0,"
             + "\"fieldCompleted\":0,\"avgDisposalDays\":null,\"remarks\":\"\",\"nothingToReport\":true}}";
         using var request = new HttpRequestMessage(HttpMethod.Post, Root + "/office/entries")
