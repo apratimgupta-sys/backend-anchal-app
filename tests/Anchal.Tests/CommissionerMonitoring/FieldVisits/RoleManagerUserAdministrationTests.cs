@@ -338,18 +338,6 @@ public sealed class RoleManagerUserAdministrationTests
         Assert.Equal(HttpStatusCode.OK, works.StatusCode);
     }
 
-    [Fact]
-    public async Task ACommissionerCannotChangeAPasswordThroughTheOfficerRoute()
-    {
-        await using var host = await MonitoringTestHost.Create();
-        await host.Login("commissioner");
-
-        using var response = await host.Client.PostAsync(Root + "/password",
-            MonitoringTestHost.Json(new { currentPassword = MonitoringTestHost.SeedPassword, newPassword = "Something#2026" }));
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
     // 9
     [Fact]
     public async Task TheSessionOfARoleManagerReportsItsRoleAndNoOffice()

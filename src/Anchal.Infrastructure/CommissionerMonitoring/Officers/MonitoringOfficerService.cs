@@ -113,7 +113,7 @@ public sealed class MonitoringOfficerService(
         {
             var session = await monitoring.GetSessionAsync(principal, ct);
             if (!session.IsSuccess) throw new MonitoringRuleException(session.Status, session.Error!);
-            if (session.Value!.Data.Role is not ("officer" or "office"))
+            if (session.Value!.Data.Role is not ("officer" or "office" or "commissioner" or "rolemanager"))
                 throw new MonitoringRuleException(403, new("FORBIDDEN", "officer access required"));
 
             var officer = await db.Users.SingleOrDefaultAsync(x => x.Id == session.Value.Data.UserId, ct)

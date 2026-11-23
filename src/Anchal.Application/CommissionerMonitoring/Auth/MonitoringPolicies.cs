@@ -33,9 +33,11 @@ public static class MonitoringPolicies
             .AddRequirements(new MonitoringRoleRequirement(FieldOfficerRole)));
         options.AddPolicy(RoleManager, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
             .AddRequirements(new MonitoringRoleRequirement(RoleManagerRole)));
-        // Anyone who can be handed a temporary password by the role manager can set their own.
+        // Every login may rotate its own password, and only its own: the handler reads the account from
+        // the session, never from the request. Without the two administrator roles here the seeded
+        // credentials could never be changed, and a temporary-password flag on either was a dead end.
         options.AddPolicy(OwnPassword, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
-            .AddRequirements(new MonitoringAnyRoleRequirement([OfficeRole, FieldOfficerRole])));
+            .AddRequirements(new MonitoringAnyRoleRequirement([OfficeRole, FieldOfficerRole, CommissionerRole, RoleManagerRole])));
         // Reading who the field officers are is not administering them: the commissioner filters the
         // visit register by officer. Writes stay on RoleManager alone.
         options.AddPolicy(OfficerRoster, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()

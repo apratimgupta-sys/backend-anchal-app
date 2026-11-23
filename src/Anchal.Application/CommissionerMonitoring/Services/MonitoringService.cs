@@ -19,6 +19,10 @@ namespace Anchal.Application.CommissionerMonitoring.Services;
 /// </summary>
 public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock) : IMonitoringService
 {
+    /// Session roles that may read the service master. An allow-list: a role added to the system
+    /// is refused here until it is named.
+    public static readonly IReadOnlyList<string> ServiceMasterReaders = ["office", "commissioner", "officer"];
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     // Versioned storage envelope, deliberately separate from the public history DTO.
@@ -32,8 +36,10 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         Run(async () =>
         {
             // The service master is read by the accounts that file and report. The role manager
-            // administers people and is not one of them.
-            if ((await Authorize(principal, ct)).Role == "rolemanager") Fail(403, "Access denied", "FORBIDDEN");
+            // administers people and is not one of them. Name who is let in, not who is kept out:
+            // a role added later must not inherit this by default.
+            if ((await Authorize(principal, ct)).Role is var role && !ServiceMasterReaders.Contains(role))
+                Fail(403, "Access denied", "FORBIDDEN");
             var catalog = await db.CatalogItems.AsNoTracking().Where(x => x.Kind == MonitoringActivityKind.Service && x.IsActive)
                 .OrderBy(x => x.SortOrder).ThenBy(x => x.Key).ToListAsync(ct);
             return ReadContent<IReadOnlyList<ServiceDto>>(catalog.Select(x => new ServiceDto(int.Parse(x.Key), x.Name)).ToArray());
@@ -321,9 +327,8 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             ? seconds * 1000 : null;
         // An office login created or reset by the role manager holds a temporary password too. Read
         // from the row, not the token, so a reset made after sign-in shows on the next session read.
-        if (role == "office") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
+        if (role != "officer") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
             MustChangePassword: user.MustChangePassword);
-        if (role != "officer") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt);
         var homeOfficeId = officeCode is { Length: > 6 } && int.TryParse(officeCode[6..], out var number) ? number : 0;
         return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
             new OfficerProfileDto(user.Id, user.LoginName, user.DisplayName, user.Designation ?? string.Empty,
