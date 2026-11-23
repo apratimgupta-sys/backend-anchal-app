@@ -52,16 +52,16 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
     public static StringContent Json(object value) =>
         new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
 
-    /// Creates an officer as the commissioner, signs them in, and clears the forced
+    /// Creates an officer as the role manager, signs them in, and clears the forced
     /// password change so the caller lands on a usable officer session.
     public async Task<JsonElement> SignInAsOfficer(
         string username = "je.kadru", string name = "A. Kumar",
         string designation = "Junior Engineer", int homeOfficeId = 3,
         string password = "Kadru#2026je")
     {
-        await Login("commissioner");
+        await Login("rolemanager");
         using var created = await client.PostAsync(Root + "/officers",
-            Json(new { username, name, designation, homeOfficeId }));
+            Json(new { username, name, designation, role = "FieldOfficer", homeOfficeId }));
         Assert.True(created.IsSuccessStatusCode,
             $"{created.StatusCode}: {await created.Content.ReadAsStringAsync()}");
         var body = await created.Content.ReadFromJsonAsync<JsonElement>();

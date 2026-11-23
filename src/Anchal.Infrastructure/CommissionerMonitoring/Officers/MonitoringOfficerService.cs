@@ -23,7 +23,7 @@ public sealed class MonitoringOfficerService(
     public Task<MonitoringResult<IReadOnlyList<OfficerProfileDto>>> ListAsync(ClaimsPrincipal principal, CancellationToken ct = default) =>
         Run<IReadOnlyList<OfficerProfileDto>>(async () =>
         {
-            await Commissioner(principal, ct);
+            await RoleManager(principal, ct);
             var officers = await Officers().OrderBy(x => x.DisplayName).ToListAsync(ct);
             return officers.Select(x => Profile(x)).ToArray();
         });
@@ -31,18 +31,27 @@ public sealed class MonitoringOfficerService(
     public Task<MonitoringResult<CreatedOfficerDto>> CreateAsync(ClaimsPrincipal principal, CreateOfficerCommand command, CancellationToken ct = default) =>
         Run(async () =>
         {
-            await Commissioner(principal, ct);
+            await RoleManager(principal, ct);
             var username = (command.Username ?? string.Empty).Trim();
             var name = (command.Name ?? string.Empty).Trim();
             var designation = (command.Designation ?? string.Empty).Trim();
             if (username.Length is 0 or > 120) throw Validation("username", "Enter a username");
             if (name.Length is 0 or > 160) throw Validation("name", "Enter the officer's name");
             if (designation.Length is 0 or > 120) throw Validation("designation", "Enter a designation");
-            if (command.HomeOfficeId is < 1 or > 6) throw Validation("homeOfficeId", "Select an Anchal");
+            // The server decides who may be created. The client agreed to field officers and extra
+            // Anchal logins; a Commissioner or RoleManager is a seeded fixture, and a UI that offers
+            // two choices over an API that accepts four is a hole. Ordinal match: "commissioner" is
+            // not a spelling of anything permitted either.
+            var role = command.Role;
+            if (role is not (MonitoringPolicies.FieldOfficerRole or MonitoringPolicies.OfficeRole))
+                throw Validation("role", "Select a valid role");
+            // Both permitted roles bind to exactly one of the six existing Anchals. No Anchal is made here.
+            if (command.HomeOfficeId is not (>= 1 and <= 6)) throw Validation("homeOfficeId", "Select an Anchal");
+            var homeOffice = command.HomeOfficeId.Value;
 
             var office = await db.Offices.SingleOrDefaultAsync(
-                x => x.Code == "anchal" + command.HomeOfficeId.ToString(CultureInfo.InvariantCulture) && x.IsActive, ct)
-                ?? throw Validation("homeOfficeId", "Select an active Anchal");
+                x => x.Code == "anchal" + homeOffice.ToString(CultureInfo.InvariantCulture) && x.IsActive, ct)
+                ?? throw Validation("homeOfficeId", "Select an Anchal");
 
             var normalized = username.ToUpperInvariant();
             if (await db.Users.AnyAsync(x => x.NormalizedLoginName == normalized, ct))
@@ -57,7 +66,7 @@ public sealed class MonitoringOfficerService(
                 PasswordHash = hasher.HashPassword(password),
                 DisplayName = name,
                 Designation = designation,
-                Role = MonitoringPolicies.FieldOfficerRole,
+                Role = role,
                 MustChangePassword = true,
                 IsActive = true,
                 CreatedAt = clock.GetUtcNow()
@@ -70,13 +79,13 @@ public sealed class MonitoringOfficerService(
                 AssignedAt = clock.GetUtcNow()
             });
             await db.SaveChangesAsync(ct);
-            return new CreatedOfficerDto(Profile(officer, command.HomeOfficeId), password);
+            return new CreatedOfficerDto(Profile(officer, homeOffice), password);
         });
 
     public Task<MonitoringResult<OfficerProfileDto>> SetActiveAsync(ClaimsPrincipal principal, Guid officerId, bool active, CancellationToken ct = default) =>
         Run(async () =>
         {
-            await Commissioner(principal, ct);
+            await RoleManager(principal, ct);
             var officer = await Load(officerId, ct);
             officer.IsActive = active;
             await db.SaveChangesAsync(ct);
@@ -86,7 +95,7 @@ public sealed class MonitoringOfficerService(
     public Task<MonitoringResult<TemporaryPasswordDto>> ResetPasswordAsync(ClaimsPrincipal principal, Guid officerId, CancellationToken ct = default) =>
         Run(async () =>
         {
-            await Commissioner(principal, ct);
+            await RoleManager(principal, ct);
             var officer = await Load(officerId, ct);
             var password = GeneratePassword();
             officer.PasswordHash = hasher.HashPassword(password);
@@ -100,7 +109,7 @@ public sealed class MonitoringOfficerService(
         {
             var session = await monitoring.GetSessionAsync(principal, ct);
             if (!session.IsSuccess) throw new MonitoringRuleException(session.Status, session.Error!);
-            if (session.Value!.Data.Role != "officer")
+            if (session.Value!.Data.Role is not ("officer" or "office"))
                 throw new MonitoringRuleException(403, new("FORBIDDEN", "officer access required"));
 
             var officer = await db.Users.SingleOrDefaultAsync(x => x.Id == session.Value.Data.UserId, ct)
@@ -121,23 +130,25 @@ public sealed class MonitoringOfficerService(
 
     private IQueryable<MonitoringUser> Officers() => db.Users
         .Include(x => x.OfficeAssignments).ThenInclude(x => x.Office)
-        .Where(x => x.Role == MonitoringPolicies.FieldOfficerRole);
+        // The role manager administers the people it may create. The commissioner and the role
+        // manager itself are not in this set: it can neither lock them out nor reset their passwords.
+        .Where(x => x.Role == MonitoringPolicies.FieldOfficerRole || x.Role == MonitoringPolicies.OfficeRole);
 
     private async Task<MonitoringUser> Load(Guid officerId, CancellationToken ct) =>
         await Officers().SingleOrDefaultAsync(x => x.Id == officerId, ct)
         ?? throw new MonitoringRuleException(404, new("NOT_FOUND", "Officer not found"));
 
-    private async Task Commissioner(ClaimsPrincipal principal, CancellationToken ct)
+    private async Task RoleManager(ClaimsPrincipal principal, CancellationToken ct)
     {
         var session = await monitoring.GetSessionAsync(principal, ct);
         if (!session.IsSuccess) throw new MonitoringRuleException(session.Status, session.Error!);
-        if (session.Value!.Data.Role != "commissioner")
-            throw new MonitoringRuleException(403, new("FORBIDDEN", "commissioner access required"));
+        if (session.Value!.Data.Role != "rolemanager")
+            throw new MonitoringRuleException(403, new("FORBIDDEN", "role manager access required"));
     }
 
     private static OfficerProfileDto Profile(MonitoringUser officer, int? homeOfficeId = null) => new(
         officer.Id, officer.LoginName, officer.DisplayName, officer.Designation ?? string.Empty,
-        homeOfficeId ?? OfficeNumber(officer), officer.IsActive);
+        homeOfficeId ?? OfficeNumber(officer), officer.IsActive, officer.Role);
 
     private static int OfficeNumber(MonitoringUser officer)
     {

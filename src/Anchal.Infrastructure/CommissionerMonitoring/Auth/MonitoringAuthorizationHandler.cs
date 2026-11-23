@@ -58,6 +58,12 @@ public sealed class MonitoringAuthorizationHandler(CommissionerMonitoringDbConte
             {
                 context.Succeed(requirement);
             }
+            else if (requirement is MonitoringAnyRoleRequirement any &&
+                     ((validOffice && any.Roles.Contains(MonitoringPolicies.OfficeRole)) ||
+                      (validFieldOfficer && any.Roles.Contains(MonitoringPolicies.FieldOfficerRole))))
+            {
+                context.Succeed(requirement);
+            }
             else if (requirement is MonitoringOfficeScopeRequirement && validOffice &&
                      context.Resource is Guid requestedOfficeId &&
                      user.OfficeAssignments.Single().OfficeId == requestedOfficeId)

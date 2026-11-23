@@ -27,22 +27,24 @@ public sealed class OfficerAdminEndpointTests
     private const string AllowedOrigin = "https://anchal.example";
 
     [Fact]
-    public async Task CommissionerSeesAnEmptyRosterBeforeAnyOfficerExists()
+    public async Task RoleManagerSeesTheSeededOfficeLoginsBeforeAnyOfficerExists()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
 
         using var response = await host.Client.GetAsync(Root + "/officers");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Empty(await response.Content.ReadFromJsonAsync<JsonElement[]>() ?? []);
+        var roster = await response.Content.ReadFromJsonAsync<JsonElement[]>() ?? [];
+        Assert.Equal(6, roster.Length);
+        Assert.All(roster, x => Assert.Equal("AnchalOffice", x.GetProperty("role").GetString()));
     }
 
     [Fact]
     public async Task CreatingAnOfficerReturnsAPasswordThatSignsThemIn()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
 
         var created = await host.CreateOfficer();
         var password = created.GetProperty("temporaryPassword").GetString();
@@ -56,11 +58,12 @@ public sealed class OfficerAdminEndpointTests
     public async Task TheTemporaryPasswordIsNeverListedAfterwards()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         await host.CreateOfficer();
 
         var body = await host.Client.GetStringAsync(Root + "/officers");
 
+        Assert.Contains("je.kadru", body);
         Assert.DoesNotContain("temporaryPassword", body);
         Assert.DoesNotContain("passwordHash", body, StringComparison.OrdinalIgnoreCase);
     }
@@ -69,12 +72,12 @@ public sealed class OfficerAdminEndpointTests
     public async Task AnOfficersHomeAnchalIsReportedAsItsNumber()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         await host.CreateOfficer(homeOfficeId: 3);
 
         var roster = await host.Client.GetFromJsonAsync<JsonElement[]>(Root + "/officers");
 
-        Assert.Equal(3, roster!.Single().GetProperty("homeOfficeId").GetInt32());
+        Assert.Equal(3, roster!.Single(x => x.GetProperty("username").GetString() == "je.kadru").GetProperty("homeOfficeId").GetInt32());
     }
 
     [Fact]
@@ -85,7 +88,7 @@ public sealed class OfficerAdminEndpointTests
 
         using var read = await host.Client.GetAsync(Root + "/officers");
         using var write = await host.Client.PostAsync(Root + "/officers",
-            Json(new { username = "x", name = "x", designation = "x", homeOfficeId = 1 }));
+            Json(new { username = "x", name = "x", designation = "x", role = "FieldOfficer", homeOfficeId = 1 }));
 
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
@@ -95,7 +98,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task AnOfficerCannotAdministerOtherOfficers()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var password = (await host.CreateOfficer()).GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", password);
 
@@ -108,7 +111,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task ANewOfficersSessionCarriesTheirProfileAndTheMustChangeFlag()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var password = (await host.CreateOfficer()).GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", password);
 
@@ -126,7 +129,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task AnOfficerWhoMustChangeTheirPasswordIsBlockedFromOtherRoutes()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var password = (await host.CreateOfficer()).GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", password);
 
@@ -142,7 +145,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task ChangingThePasswordClearsTheFlagAndTheOldPasswordStopsWorking()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var password = (await host.CreateOfficer()).GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", password);
 
@@ -165,7 +168,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task ThePasswordChangeIsRefusedWhenTheCurrentOneIsWrong()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var password = (await host.CreateOfficer()).GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", password);
 
@@ -181,7 +184,7 @@ public sealed class OfficerAdminEndpointTests
     public async Task DeactivatingAnOfficerStopsThemSigningIn()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var created = await host.CreateOfficer();
         var id = created.GetProperty("officer").GetProperty("id").GetString()!;
         var password = created.GetProperty("temporaryPassword").GetString()!;
@@ -197,13 +200,13 @@ public sealed class OfficerAdminEndpointTests
     public async Task ResettingAPasswordIssuesANewOneAndForcesAChangeAgain()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         var created = await host.CreateOfficer();
         var id = created.GetProperty("officer").GetProperty("id").GetString()!;
         var first = created.GetProperty("temporaryPassword").GetString()!;
         await host.Login("je.kadru", first);
         await host.Client.PostAsync(Root + "/password", Json(new { currentPassword = first, newPassword = "Kadru#2026je" }));
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
 
         var reset = await host.Client.PostAsync(Root + "/officers/" + id + "/password-reset", Json(new { }));
         Assert.True(reset.IsSuccessStatusCode, $"{reset.StatusCode}: {await reset.Content.ReadAsStringAsync()}");
@@ -220,11 +223,11 @@ public sealed class OfficerAdminEndpointTests
     public async Task ADuplicateUsernameIsRefused()
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
         await host.CreateOfficer();
 
         using var again = await host.Client.PostAsync(Root + "/officers",
-            Json(new { username = "je.kadru", name = "Someone Else", designation = "AE", homeOfficeId = 2 }));
+            Json(new { username = "je.kadru", name = "Someone Else", designation = "AE", role = "FieldOfficer", homeOfficeId = 2 }));
 
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
     }
@@ -235,24 +238,24 @@ public sealed class OfficerAdminEndpointTests
     public async Task AnImpossibleHomeAnchalIsRefused(int homeOfficeId)
     {
         await using var host = await OfficerHost.Create();
-        await host.Login("commissioner");
+        await host.Login("rolemanager");
 
         using var response = await host.Client.PostAsync(Root + "/officers",
-            Json(new { username = "je.new", name = "A", designation = "JE", homeOfficeId }));
+            Json(new { username = "je.new", name = "A", designation = "JE", role = "FieldOfficer", homeOfficeId }));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     [Fact]
-    public async Task AnOfficerCannotChangeAnotherAccountsPassword()
+    public async Task AnOfficeAccountMayChangeItsOwnPasswordButNeedsTheCurrentOne()
     {
         await using var host = await OfficerHost.Create();
         await host.Login("anchal1");
 
         using var response = await host.Client.PostAsync(Root + "/password",
-            Json(new { currentPassword = "Api-contract-password-123!", newPassword = "Something#2026" }));
+            Json(new { currentPassword = "not-the-password", newPassword = "Something#2026" }));
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     private static StringContent Json(object value) =>
@@ -270,7 +273,7 @@ public sealed class OfficerAdminEndpointTests
             string designation = "Junior Engineer", int homeOfficeId = 3)
         {
             using var response = await client.PostAsync(Root + "/officers",
-                Json(new { username, name, designation, homeOfficeId }));
+                Json(new { username, name, designation, role = "FieldOfficer", homeOfficeId }));
             Assert.True(response.IsSuccessStatusCode,
                 $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
             return await response.Content.ReadFromJsonAsync<JsonElement>();

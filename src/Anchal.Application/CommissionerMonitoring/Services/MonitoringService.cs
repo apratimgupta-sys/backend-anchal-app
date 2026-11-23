@@ -31,7 +31,9 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
     public Task<MonitoringResult<MonitoringRead<IReadOnlyList<ServiceDto>>>> GetServicesAsync(ClaimsPrincipal principal, CancellationToken ct = default) =>
         Run(async () =>
         {
-            await Authorize(principal, ct);
+            // The service master is read by the accounts that file and report. The role manager
+            // administers people and is not one of them.
+            if ((await Authorize(principal, ct)).Role == "rolemanager") Fail(403, "Access denied", "FORBIDDEN");
             var catalog = await db.CatalogItems.AsNoTracking().Where(x => x.Kind == MonitoringActivityKind.Service && x.IsActive)
                 .OrderBy(x => x.SortOrder).ThenBy(x => x.Key).ToListAsync(ct);
             return ReadContent<IReadOnlyList<ServiceDto>>(catalog.Select(x => new ServiceDto(int.Parse(x.Key), x.Name)).ToArray());
@@ -193,8 +195,9 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         // Reporting accounts only. A field officer is bound to an office without
         // being entitled to read that office's correction trail — its actors,
         // reasons and before/after figures (spec 7.1 gives them their own
-        // filings and nothing else).
-        if (session.Role == "officer") Fail(403, "Access denied", "FORBIDDEN");
+        // filings and nothing else). The role manager has no office, so without this
+        // it would read every office's trail the way the commissioner does.
+        if (session.Role is not ("office" or "commissioner")) Fail(403, "Access denied", "FORBIDDEN");
         var audits = await LoadAudits(session.OfficeId, ct);
         var history = audits.OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id).Take(200).Select(x =>
         {
@@ -308,6 +311,10 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         }
         else if (user.Role == MonitoringPolicies.CommissionerRole && user.OfficeAssignments.Count == 0 &&
                  !identity.HasClaim(x => x.Type == MonitoringPolicies.OfficeIdClaim)) role = "commissioner";
+        // Like the commissioner, the role manager belongs to no office. It gets a session so the
+        // portal can route it to user administration; every data route still refuses it.
+        else if (user.Role == MonitoringPolicies.RoleManagerRole && user.OfficeAssignments.Count == 0 &&
+                 !identity.HasClaim(x => x.Type == MonitoringPolicies.OfficeIdClaim)) role = "rolemanager";
         else { Fail(403, "Monitoring role unavailable", "FORBIDDEN"); return null!; }
         if (requiredRole is not null && role != requiredRole) Fail(403, $"{requiredRole} access required", "FORBIDDEN");
         long? expiresAt = long.TryParse(Single("exp"), out var seconds) && seconds >= 0 && seconds <= long.MaxValue / 1000
@@ -316,7 +323,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         var homeOfficeId = officeCode is { Length: > 6 } && int.TryParse(officeCode[6..], out var number) ? number : 0;
         return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
             new OfficerProfileDto(user.Id, user.LoginName, user.DisplayName, user.Designation ?? string.Empty,
-                homeOfficeId, user.IsActive),
+                homeOfficeId, user.IsActive, user.Role),
             user.MustChangePassword);
     }
 

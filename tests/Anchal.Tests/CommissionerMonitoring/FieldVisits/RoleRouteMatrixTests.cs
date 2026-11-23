@@ -59,7 +59,7 @@ public sealed class RoleRouteMatrixTests
 }
 
 /// A password reset must end the officer's current session, not merely change
-/// what they type next time. The commissioner resets a password when a phone
+/// what they type next time. The role manager resets a password when a phone
 /// is lost; a cookie that keeps working for up to the token lifetime makes
 /// that instruction useless.
 public sealed class PasswordResetRevokesSessionTests
@@ -74,9 +74,9 @@ public sealed class PasswordResetRevokesSessionTests
         await using var host = await MonitoringTestHost.Create();
         var officer = await host.SignInAsOfficer();
 
-        // The commissioner resets it from their own client, as they would in life.
+        // The role manager resets it from their own client, as they would in life.
         using var admin = host.NewClient();
-        await MonitoringTestHost.Login(admin, "commissioner");
+        await MonitoringTestHost.Login(admin, "rolemanager");
         using var reset = await admin.PostAsync(
             MonitoringTestHost.Root + $"/officers/{officer.GetProperty("id").GetString()}/password-reset",
             MonitoringTestHost.Json(new { }));

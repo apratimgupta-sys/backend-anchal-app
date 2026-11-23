@@ -15,8 +15,11 @@ public sealed record SessionDto(Guid UserId, string Username, string Role, Guid?
     OfficerProfileDto? Officer = null, bool? MustChangePassword = null);
 // HomeOfficeId is the Anchal number the officer is posted to, not the office's Guid:
 // the adapter only rewrites a key named officeId, and this value is already public-facing.
-public sealed record OfficerProfileDto(Guid Id, string Username, string Name, string Designation, int HomeOfficeId, bool Active);
-public sealed record CreateOfficerCommand(string Username, string Name, string Designation, int HomeOfficeId);
+// Role is the stored role string (FieldOfficer or AnchalOffice), so the roster can tell the two apart.
+public sealed record OfficerProfileDto(Guid Id, string Username, string Name, string Designation, int HomeOfficeId, bool Active, string Role = "");
+// Role is FieldOfficer or AnchalOffice; both bind to one of the six existing Anchals, so HomeOfficeId
+// is nullable only so that leaving it out is a validation error rather than a silent 0.
+public sealed record CreateOfficerCommand(string Username, string Name, string Designation, string? Role, int? HomeOfficeId);
 public sealed record CreatedOfficerDto(OfficerProfileDto Officer, string TemporaryPassword);
 public sealed record TemporaryPasswordDto(string TemporaryPassword);
 public sealed record ChangePasswordCommand(string CurrentPassword, string NewPassword);

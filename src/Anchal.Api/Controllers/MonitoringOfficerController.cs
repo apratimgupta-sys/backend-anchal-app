@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Anchal.Api.Controllers;
 
-[ApiController, Route("v1/api/anchal/officers"), Authorize(Policy = MonitoringPolicies.Commissioner)]
+[ApiController, Route("v1/api/anchal/officers"), Authorize(Policy = MonitoringPolicies.RoleManager)]
 public sealed class MonitoringOfficerController(IMonitoringOfficerService officers, MonitoringHttpAdapter adapter) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> List(CancellationToken ct) => await adapter.Result(await officers.ListAsync(User, ct), ct);
@@ -37,7 +37,7 @@ public sealed class MonitoringOfficerController(IMonitoringOfficerService office
             : await adapter.Result(await officers.ResetPasswordAsync(User, officerId, ct), ct);
 }
 
-[ApiController, Route("v1/api/anchal/password"), Authorize(Policy = MonitoringPolicies.FieldOfficer)]
+[ApiController, Route("v1/api/anchal/password"), Authorize(Policy = MonitoringPolicies.OwnPassword)]
 public sealed class MonitoringPasswordController(IMonitoringOfficerService officers, MonitoringHttpAdapter adapter) : ControllerBase
 {
     [HttpPost] public async Task<IActionResult> Change(CancellationToken ct)

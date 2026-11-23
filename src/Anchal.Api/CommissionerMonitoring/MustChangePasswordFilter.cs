@@ -40,13 +40,14 @@ public sealed class MustChangePasswordFilter : IAsyncActionFilter
         await next();
     }
 
-    /// The claim is minted at sign-in, so a password reset the commissioner made
+    /// The claim is minted at sign-in, so a password reset the role manager made
     /// afterwards is invisible to it. Read the officer's row instead: a reset
     /// then ends the session on the next request, which is what "reset the
     /// password because the phone was lost" has to mean.
     private static async Task<bool> ResetSinceSignIn(HttpContext http)
     {
-        if (http.User.FindFirstValue(MonitoringPolicies.RoleClaim) != MonitoringPolicies.FieldOfficerRole ||
+        if (http.User.FindFirstValue(MonitoringPolicies.RoleClaim) is not
+                (MonitoringPolicies.FieldOfficerRole or MonitoringPolicies.OfficeRole) ||
             !Guid.TryParse(http.User.FindFirstValue(MonitoringPolicies.UserIdClaim), out var userId))
             return false;
         var db = http.RequestServices.GetService<CommissionerMonitoringDbContext>();
