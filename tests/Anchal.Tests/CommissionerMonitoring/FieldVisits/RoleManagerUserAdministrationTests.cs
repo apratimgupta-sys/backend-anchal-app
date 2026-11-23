@@ -38,7 +38,7 @@ public sealed class RoleManagerUserAdministrationTests
 
     // 1
     [Fact]
-    public async Task ACommissionerIsDeniedEveryOfficerEndpoint()
+    public async Task ACommissionerMayListOfficersButIsRefusedEveryWrite()
     {
         await using var host = await MonitoringTestHost.Create();
         await host.Login("rolemanager");
@@ -54,7 +54,10 @@ public sealed class RoleManagerUserAdministrationTests
         using var reset = await host.Client.PostAsync(Root + $"/officers/{id}/password-reset",
             MonitoringTestHost.Json(new { }));
 
-        Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
+        // Reading who the officers are feeds the visit-register filter; it is not administration.
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var visible = await list.Content.ReadFromJsonAsync<JsonElement[]>();
+        Assert.Equal(["target.officer"], visible!.Select(x => x.GetProperty("username").GetString()).ToArray());
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, setActive.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, reset.StatusCode);
@@ -62,6 +65,64 @@ public sealed class RoleManagerUserAdministrationTests
         await host.Login("rolemanager");
         var roster = await host.Client.GetFromJsonAsync<JsonElement[]>(Root + "/officers");
         Assert.True(roster!.Single(x => x.GetProperty("username").GetString() == "target.officer").GetProperty("active").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnOfficeLoginCannotReadTheRoster()
+    {
+        await using var host = await MonitoringTestHost.Create();
+        await host.Login("anchal1");
+        using var office = await host.Client.GetAsync(Root + "/officers");
+        Assert.Equal(HttpStatusCode.Forbidden, office.StatusCode);
+    }
+
+    [Fact]
+    public async Task AnOfficerCannotReadTheRosterEither()
+    {
+        await using var host = await MonitoringTestHost.Create();
+        await host.SignInAsOfficer();
+        using var response = await host.Client.GetAsync(Root + "/officers");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheSessionOfAnOfficeLoginCarriesMustChangePasswordFromTheRow()
+    {
+        await using var host = await MonitoringTestHost.Create();
+        await host.Login("rolemanager");
+        using var created = await Post(host, Body("anchal6.second", "AnchalOffice", 6));
+        var body = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var temporary = body.GetProperty("temporaryPassword").GetString()!;
+        var id = body.GetProperty("officer").GetProperty("id").GetString();
+
+        // A seeded office login has no pending change.
+        using var seeded = host.NewClient();
+        await MonitoringTestHost.Login(seeded, "anchal6");
+        Assert.False((await seeded.GetFromJsonAsync<JsonElement>(Root + "/session")).GetProperty("mustChangePassword").GetBoolean());
+
+        // A created one does, and the session says so.
+        using var second = host.NewClient();
+        await MonitoringTestHost.Login(second, "anchal6.second", temporary);
+        Assert.True((await second.GetFromJsonAsync<JsonElement>(Root + "/session")).GetProperty("mustChangePassword").GetBoolean());
+        var changed = "Second#2026ab";
+        using var change = await second.PostAsync(Root + "/password",
+            MonitoringTestHost.Json(new { currentPassword = temporary, newPassword = changed }));
+        Assert.True(change.IsSuccessStatusCode);
+        await MonitoringTestHost.Login(second, "anchal6.second", changed);
+        Assert.False((await second.GetFromJsonAsync<JsonElement>(Root + "/session")).GetProperty("mustChangePassword").GetBoolean());
+        using var fine = await second.GetAsync(Root + "/office/setup");
+        Assert.Equal(HttpStatusCode.OK, fine.StatusCode);
+
+        // The role manager resets it while that login is still signed in. The token's claim is stale
+        // (it was minted without the flag); the session reads the row, so it reports true at once and
+        // other routes are held with the same code a fresh login gets.
+        using var reset = await host.Client.PostAsync(Root + $"/officers/{id}/password-reset",
+            MonitoringTestHost.Json(new { }));
+        Assert.True(reset.IsSuccessStatusCode);
+        Assert.True((await second.GetFromJsonAsync<JsonElement>(Root + "/session")).GetProperty("mustChangePassword").GetBoolean());
+        using var held = await second.GetAsync(Root + "/office/setup");
+        Assert.Equal(HttpStatusCode.Forbidden, held.StatusCode);
+        Assert.Contains("password_change_required", await held.Content.ReadAsStringAsync());
     }
 
     // 2

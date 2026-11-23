@@ -11,6 +11,7 @@ public static class MonitoringPolicies
     public const string FieldOfficer = "MonitoringFieldOfficer";
     public const string RoleManager = "MonitoringRoleManager";
     public const string OwnPassword = "MonitoringOwnPassword";
+    public const string OfficerRoster = "MonitoringOfficerRoster";
     public const string ScopeClaim = "monitoring_scope";
     public const string ScopeValue = "commissioner_monitoring";
     public const string RoleClaim = "monitoring_role";
@@ -35,6 +36,10 @@ public static class MonitoringPolicies
         // Anyone who can be handed a temporary password by the role manager can set their own.
         options.AddPolicy(OwnPassword, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
             .AddRequirements(new MonitoringAnyRoleRequirement([OfficeRole, FieldOfficerRole])));
+        // Reading who the field officers are is not administering them: the commissioner filters the
+        // visit register by officer. Writes stay on RoleManager alone.
+        options.AddPolicy(OfficerRoster, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
+            .AddRequirements(new MonitoringAnyRoleRequirement([CommissionerRole, RoleManagerRole])));
         options.AddPolicy(OfficeScope, policy => policy.AddAuthenticationSchemes(AuthenticationScheme).RequireAuthenticatedUser()
             .AddRequirements(new MonitoringOfficeScopeRequirement()));
     }

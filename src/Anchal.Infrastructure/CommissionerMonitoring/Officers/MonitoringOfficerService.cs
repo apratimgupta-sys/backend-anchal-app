@@ -23,8 +23,12 @@ public sealed class MonitoringOfficerService(
     public Task<MonitoringResult<IReadOnlyList<OfficerProfileDto>>> ListAsync(ClaimsPrincipal principal, CancellationToken ct = default) =>
         Run<IReadOnlyList<OfficerProfileDto>>(async () =>
         {
-            await RoleManager(principal, ct);
-            var officers = await Officers().OrderBy(x => x.DisplayName).ToListAsync(ct);
+            var role = await Reader(principal, ct);
+            var query = Officers();
+            // The commissioner's list feeds the visit-register filter. Office logins file no visits,
+            // so they would be rows that can never match.
+            if (role == "commissioner") query = query.Where(x => x.Role == MonitoringPolicies.FieldOfficerRole);
+            var officers = await query.OrderBy(x => x.DisplayName).ToListAsync(ct);
             return officers.Select(x => Profile(x)).ToArray();
         });
 
@@ -137,6 +141,16 @@ public sealed class MonitoringOfficerService(
     private async Task<MonitoringUser> Load(Guid officerId, CancellationToken ct) =>
         await Officers().SingleOrDefaultAsync(x => x.Id == officerId, ct)
         ?? throw new MonitoringRuleException(404, new("NOT_FOUND", "Officer not found"));
+
+    private async Task<string> Reader(ClaimsPrincipal principal, CancellationToken ct)
+    {
+        var session = await monitoring.GetSessionAsync(principal, ct);
+        if (!session.IsSuccess) throw new MonitoringRuleException(session.Status, session.Error!);
+        var role = session.Value!.Data.Role;
+        if (role is not ("rolemanager" or "commissioner"))
+            throw new MonitoringRuleException(403, new("FORBIDDEN", "role manager access required"));
+        return role;
+    }
 
     private async Task RoleManager(ClaimsPrincipal principal, CancellationToken ct)
     {

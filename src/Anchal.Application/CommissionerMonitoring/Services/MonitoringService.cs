@@ -319,6 +319,10 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
         if (requiredRole is not null && role != requiredRole) Fail(403, $"{requiredRole} access required", "FORBIDDEN");
         long? expiresAt = long.TryParse(Single("exp"), out var seconds) && seconds >= 0 && seconds <= long.MaxValue / 1000
             ? seconds * 1000 : null;
+        // An office login created or reset by the role manager holds a temporary password too. Read
+        // from the row, not the token, so a reset made after sign-in shows on the next session read.
+        if (role == "office") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,
+            MustChangePassword: user.MustChangePassword);
         if (role != "officer") return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt);
         var homeOfficeId = officeCode is { Length: > 6 } && int.TryParse(officeCode[6..], out var number) ? number : 0;
         return new(user.Id, user.LoginName, role, officeId, officeCode, expiresAt,

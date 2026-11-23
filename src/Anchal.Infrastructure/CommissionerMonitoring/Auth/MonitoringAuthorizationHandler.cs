@@ -60,7 +60,9 @@ public sealed class MonitoringAuthorizationHandler(CommissionerMonitoringDbConte
             }
             else if (requirement is MonitoringAnyRoleRequirement any &&
                      ((validOffice && any.Roles.Contains(MonitoringPolicies.OfficeRole)) ||
-                      (validFieldOfficer && any.Roles.Contains(MonitoringPolicies.FieldOfficerRole))))
+                      (validFieldOfficer && any.Roles.Contains(MonitoringPolicies.FieldOfficerRole)) ||
+                      (validCommissioner && any.Roles.Contains(MonitoringPolicies.CommissionerRole)) ||
+                      (validRoleManager && any.Roles.Contains(MonitoringPolicies.RoleManagerRole))))
             {
                 context.Succeed(requirement);
             }

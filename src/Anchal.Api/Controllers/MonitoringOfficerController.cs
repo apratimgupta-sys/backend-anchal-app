@@ -7,12 +7,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Anchal.Api.Controllers;
 
-[ApiController, Route("v1/api/anchal/officers"), Authorize(Policy = MonitoringPolicies.RoleManager)]
+[ApiController, Route("v1/api/anchal/officers")]
 public sealed class MonitoringOfficerController(IMonitoringOfficerService officers, MonitoringHttpAdapter adapter) : ControllerBase
 {
-    [HttpGet] public async Task<IActionResult> List(CancellationToken ct) => await adapter.Result(await officers.ListAsync(User, ct), ct);
+    [HttpGet, Authorize(Policy = MonitoringPolicies.OfficerRoster)] public async Task<IActionResult> List(CancellationToken ct) => await adapter.Result(await officers.ListAsync(User, ct), ct);
 
-    [HttpPost] public async Task<IActionResult> Create(CancellationToken ct)
+    [HttpPost, Authorize(Policy = MonitoringPolicies.RoleManager)] public async Task<IActionResult> Create(CancellationToken ct)
     {
         var command = MonitoringHttpAdapter.Command<CreateOfficerCommand>(await adapter.Body(Request, ct));
         var result = await officers.CreateAsync(User, command, ct);
@@ -21,7 +21,7 @@ public sealed class MonitoringOfficerController(IMonitoringOfficerService office
             : new ObjectResult(result.Error) { StatusCode = result.Status };
     }
 
-    [HttpPatch("{id}")] public async Task<IActionResult> SetActive(string id, CancellationToken ct)
+    [HttpPatch("{id}"), Authorize(Policy = MonitoringPolicies.RoleManager)] public async Task<IActionResult> SetActive(string id, CancellationToken ct)
     {
         if (!Guid.TryParse(id, out var officerId)) return NotFound(new { code = "NOT_FOUND", message = "Officer not found" });
         var body = await adapter.Body(Request, ct);
@@ -31,7 +31,7 @@ public sealed class MonitoringOfficerController(IMonitoringOfficerService office
         return await adapter.Result(await officers.SetActiveAsync(User, officerId, active.GetBoolean(), ct), ct);
     }
 
-    [HttpPost("{id}/password-reset")] public async Task<IActionResult> ResetPassword(string id, CancellationToken ct) =>
+    [HttpPost("{id}/password-reset"), Authorize(Policy = MonitoringPolicies.RoleManager)] public async Task<IActionResult> ResetPassword(string id, CancellationToken ct) =>
         !Guid.TryParse(id, out var officerId)
             ? NotFound(new { code = "NOT_FOUND", message = "Officer not found" })
             : await adapter.Result(await officers.ResetPasswordAsync(User, officerId, ct), ct);
