@@ -3,7 +3,7 @@ namespace Anchal.Api.Provisioning;
 public static class AnchalProvisioningCredentials
 {
     private static readonly HashSet<string> ApprovedAccounts =
-        ["anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner"];
+        ["anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner", "rolemanager"];
 
     public static IReadOnlyDictionary<string, string> Read(string path)
     {
@@ -18,10 +18,10 @@ public static class AnchalProvisioningCredentials
             var name = line[..separator];
             var password = line[(separator + 1)..];
             if (!ApprovedAccounts.Contains(name) || password.Length is < 12 or > 128 || !credentials.TryAdd(name, password))
-                throw new InvalidOperationException("Provide one 12-128 character password for each of the seven approved monitoring accounts.");
+                throw new InvalidOperationException("Provide one 12-128 character password for each of the eight approved monitoring accounts.");
         }
         if (credentials.Count != ApprovedAccounts.Count)
-            throw new InvalidOperationException("Provide one 12-128 character password for each of the seven approved monitoring accounts.");
+            throw new InvalidOperationException("Provide one 12-128 character password for each of the eight approved monitoring accounts.");
         return credentials;
     }
 }

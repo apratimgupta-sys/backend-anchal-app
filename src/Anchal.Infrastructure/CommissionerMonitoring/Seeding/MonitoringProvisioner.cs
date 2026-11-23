@@ -12,7 +12,7 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
     : IMonitoringProvisioner
 {
     private static readonly string[] LoginNames =
-        ["anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner"];
+        ["anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner", "rolemanager"];
 
     // Copied from the approved Cloudflare monitoring service catalog, keyed by its stable service ID.
     private static readonly string[] ServiceNames =
@@ -38,7 +38,7 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
                 password.Length < 12 || password.Length > 128))
         {
             throw new ArgumentException(
-                "Provide a 12-128 character password for each of the seven approved monitoring accounts.",
+                "Provide a 12-128 character password for each of the eight approved monitoring accounts.",
                 nameof(credentials));
         }
 
@@ -66,6 +66,8 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
         }
 
         await ProvisionUser("commissioner", MonitoringPolicies.CommissionerRole, null,
+            users, credentials, now);
+        await ProvisionUser("rolemanager", MonitoringPolicies.RoleManagerRole, null,
             users, credentials, now);
 
         for (var i = 0; i < ServiceNames.Length; i++)
@@ -117,7 +119,7 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
         var user = new MonitoringUser
         {
             Id = Guid.NewGuid(), LoginName = loginName, NormalizedLoginName = normalized,
-            DisplayName = office?.Name ?? "Commissioner", Role = role,
+            DisplayName = office?.Name ?? (role == MonitoringPolicies.RoleManagerRole ? "Role Manager" : "Commissioner"), Role = role,
             PasswordHash = hasher.HashPassword(credentials[loginName]),
             IsActive = true, CreatedAt = now
         };

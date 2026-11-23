@@ -17,7 +17,7 @@ public sealed class ProvisioningWorkflowTests
 
             var error = Assert.Throws<InvalidOperationException>(() => AnchalProvisioningCredentials.Read(path));
 
-            Assert.Contains("seven approved monitoring accounts", error.Message, StringComparison.Ordinal);
+            Assert.Contains("eight approved monitoring accounts", error.Message, StringComparison.Ordinal);
         }
         finally
         {

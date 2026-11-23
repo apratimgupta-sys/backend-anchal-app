@@ -21,7 +21,7 @@ deploy/apply-migrations.sh
 
 `GET /health` is process health and does not require the monitoring database to be resolvable. `GET /health/commissioner-monitoring` checks the dedicated database and returns HTTP 503 with `{ "status": "unhealthy" }` if it cannot be reached or configured safely.
 
-For a fresh isolated database, create a protected credentials file with exactly one 12-128 character password for each of `anchal1` through `anchal6` and `commissioner`, then run the explicit operator command below. It first applies only Anchal migrations and then invokes `IMonitoringProvisioner`; it is never part of ordinary API startup or deployment.
+For a fresh isolated database, create a protected credentials file with exactly one 12-128 character password for each of `anchal1` through `anchal6`, `commissioner` and `rolemanager`, then run the explicit operator command below. It first applies only Anchal migrations and then invokes `IMonitoringProvisioner`; it is never part of ordinary API startup or deployment.
 
 ```sh
 deploy/provision-anchal.sh --env-file /etc/anchal-api/anchal.env --credentials-file /etc/anchal-api/anchal-provisioning.env

@@ -28,7 +28,8 @@ public sealed class MonitoringAuthenticator(
         {
             officeId = user.OfficeAssignments.Single().OfficeId;
         }
-        else if (user.Role != MonitoringPolicies.CommissionerRole || user.OfficeAssignments.Count != 0)
+        else if (user.Role is not (MonitoringPolicies.CommissionerRole or MonitoringPolicies.RoleManagerRole) ||
+                 user.OfficeAssignments.Count != 0)
         {
             return null;
         }

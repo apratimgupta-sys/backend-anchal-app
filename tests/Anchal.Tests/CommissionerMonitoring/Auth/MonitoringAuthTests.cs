@@ -129,7 +129,7 @@ public sealed class MonitoringAuthTests
         var firstHash = (await db.Users.SingleAsync(x => x.LoginName == "anchal1")).PasswordHash;
         await provisioner.ProvisionAsync(Credentials("DifferentSecurePass12!"));
 
-        Assert.Equal(7, await db.Users.CountAsync());
+        Assert.Equal(8, await db.Users.CountAsync());
         Assert.Equal(6, await db.Offices.CountAsync());
         Assert.Equal(6, await db.UserOffices.CountAsync());
         Assert.Equal(25, await db.CatalogItems.CountAsync());
@@ -153,7 +153,7 @@ public sealed class MonitoringAuthTests
         officeUser.Role = MonitoringPolicies.CommissionerRole;
         await db.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => provisioner.ProvisionAsync(Credentials()));
-        Assert.Equal(7, await db.Users.CountAsync());
+        Assert.Equal(8, await db.Users.CountAsync());
         Assert.Equal(25, await db.CatalogItems.CountAsync());
 
         officeUser.Role = MonitoringPolicies.OfficeRole;
@@ -198,7 +198,7 @@ public sealed class MonitoringAuthTests
     }
 
     private static Dictionary<string, string> Credentials(string password = Password) =>
-        new[] { "anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner" }
+        new[] { "anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner", "rolemanager" }
             .ToDictionary(x => x, _ => password);
 
     private static Task<AuthenticateResult> AuthenticateAsync(ServiceProvider provider, string token)

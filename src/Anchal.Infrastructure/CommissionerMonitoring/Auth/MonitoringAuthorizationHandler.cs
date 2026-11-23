@@ -44,13 +44,17 @@ public sealed class MonitoringAuthorizationHandler(CommissionerMonitoringDbConte
         var validFieldOfficer = user.Role == MonitoringPolicies.FieldOfficerRole && validOfficeBinding;
         var validCommissioner = user.Role == MonitoringPolicies.CommissionerRole &&
             officeIdClaims.Length == 0 && user.OfficeAssignments.Count == 0;
+        // The role manager administers users and, like the commissioner, belongs to no office.
+        var validRoleManager = user.Role == MonitoringPolicies.RoleManagerRole &&
+            officeIdClaims.Length == 0 && user.OfficeAssignments.Count == 0;
 
         foreach (var requirement in context.PendingRequirements.ToArray())
         {
             if (requirement is MonitoringRoleRequirement role &&
                 ((role.Role == MonitoringPolicies.OfficeRole && validOffice) ||
                  (role.Role == MonitoringPolicies.CommissionerRole && validCommissioner) ||
-                 (role.Role == MonitoringPolicies.FieldOfficerRole && validFieldOfficer)))
+                 (role.Role == MonitoringPolicies.FieldOfficerRole && validFieldOfficer) ||
+                 (role.Role == MonitoringPolicies.RoleManagerRole && validRoleManager)))
             {
                 context.Succeed(requirement);
             }

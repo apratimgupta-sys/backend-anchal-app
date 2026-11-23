@@ -338,7 +338,7 @@ public sealed class MonitoringEndpointTests
             using (var scope = app.Services.CreateScope())
             {
                 await scope.ServiceProvider.GetRequiredService<IMonitoringProvisioner>().ProvisionAsync(
-                    Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner")
+                    Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner").Append("rolemanager")
                         .ToDictionary(x => x, _ => "Api-contract-password-123!"));
                 Assert.NotNull(await scope.ServiceProvider.GetRequiredService<IMonitoringAuthenticator>()
                     .SignInAsync("anchal1", "Api-contract-password-123!"));

@@ -117,7 +117,7 @@ internal sealed class MonitoringTestHost(WebApplication app, HttpClient client) 
         app.MapControllers();
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IMonitoringProvisioner>().ProvisionAsync(
-                Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner")
+                Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner").Append("rolemanager")
                     .ToDictionary(x => x, _ => SeedPassword));
         await app.StartAsync();
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();

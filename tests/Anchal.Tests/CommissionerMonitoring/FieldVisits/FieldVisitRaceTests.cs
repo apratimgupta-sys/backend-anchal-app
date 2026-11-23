@@ -136,7 +136,7 @@ public sealed class FieldVisitRaceTests
                 await scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>()
                     .Database.MigrateAsync();
                 await scope.ServiceProvider.GetRequiredService<IMonitoringProvisioner>().ProvisionAsync(
-                    Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner")
+                    Enumerable.Range(1, 6).Select(i => "anchal" + i).Append("commissioner").Append("rolemanager")
                         .ToDictionary(x => x, _ => "Race-test-password-123!"));
             }
             return database;
