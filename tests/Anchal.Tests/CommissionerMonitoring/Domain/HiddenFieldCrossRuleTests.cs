@@ -27,7 +27,8 @@ public sealed class HiddenFieldCrossRuleTests
     [Fact]
     public void CollectedFieldsAreTheOnesTheShapeAsksFor()
     {
-        Assert.Equal(new[] { "received", "completed" }, MonitoringRules.CollectedFields(1));
+        Assert.Equal(new[] { "received", "completed" }, MonitoringRules.CollectedFields(11));
+        Assert.Equal(new[] { "received", "completed", "amountPaise" }, MonitoringRules.CollectedFields(1));
         Assert.Equal(new[] { "received", "amountPaise" }, MonitoringRules.CollectedFields(2));
         Assert.Equal(new[] { "completed" }, MonitoringRules.CollectedFields(15));
     }

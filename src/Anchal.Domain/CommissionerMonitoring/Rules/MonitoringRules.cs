@@ -10,7 +10,7 @@ public sealed record EntryInput(int ServiceId, DateOnly ServiceDate, string Ward
 public sealed record DerivedEntry(EntryInput Input, Balances Opening, Balances Closing);
 public sealed record MonitoringError(string Code, string Message, IReadOnlyDictionary<string, string>? FieldErrors = null, DateOnly? ConflictDate = null, int? ServiceId = null);
 public sealed class MonitoringRuleException(int status, MonitoringError error) : Exception(error.Message) { public int Status { get; } = status; public MonitoringError Error { get; } = error; }
-public enum MonitoringFormShape { Counter, Revenue, FieldWork }
+public enum MonitoringFormShape { Counter, CounterRevenue, Revenue, FieldWork }
 public static class MonitoringRules
 {
     private static readonly TimeZoneInfo Kolkata = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
@@ -25,7 +25,7 @@ public static class MonitoringRules
     // the completed-vs-received rule does not apply.
     //
     // TWIN: formShape in src/domain/service-kind.ts in the frontend repo, which
-    // derives the same three sets from the Primary Monitoring Unit column of
+    // derives the same four sets from the Primary Monitoring Unit column of
     // src/shared/services.json. That column is the source of truth; the backend
     // has no service master, so these sets are copied by hand.
     //
@@ -36,16 +36,27 @@ public static class MonitoringRules
     // under one shape and renders under another, and its whole closing history
     // re-derives on the next read.
     //
+    // 1 new holding, 3 trade licence, 4 water connection and 7 data correction
+    // are the fourth shape, CounterRevenue: a queue and money together. They were
+    // counter services, so their opening balances are already locked in and the
+    // shape moves the pending balance exactly as counter does.
+    //
     // Services not listed are counter shape (grievance, service 12, included).
+    private static readonly HashSet<int> CounterRevenueServices = [1, 3, 4, 7];
     private static readonly HashSet<int> FieldWorkServices = [8, 9, 10, 13, 14, 15, 16, 17];
     private static readonly HashSet<int> RevenueServices = [2, 5, 6];
 
+    // CounterRevenue is tested first: the order must never decide a shape, only
+    // set membership, and the sets are disjoint.
     public static MonitoringFormShape FormShape(int serviceId) =>
-        FieldWorkServices.Contains(serviceId) ? MonitoringFormShape.FieldWork
+        CounterRevenueServices.Contains(serviceId) ? MonitoringFormShape.CounterRevenue
+        : FieldWorkServices.Contains(serviceId) ? MonitoringFormShape.FieldWork
         : RevenueServices.Contains(serviceId) ? MonitoringFormShape.Revenue
         : MonitoringFormShape.Counter;
 
-    public static bool MovesPendingBalance(int serviceId) => FormShape(serviceId) == MonitoringFormShape.Counter;
+    // Only the shapes with a queue move the pending balance.
+    public static bool MovesPendingBalance(int serviceId) =>
+        FormShape(serviceId) is MonitoringFormShape.Counter or MonitoringFormShape.CounterRevenue;
 
     public static bool IsFieldWork(int serviceId) => FormShape(serviceId) == MonitoringFormShape.FieldWork;
 
@@ -53,11 +64,13 @@ public static class MonitoringRules
     // instead of nine. Everything else in the record is retired — kept for the
     // entries already filed with it, collected from nobody.
     private static readonly string[] CounterFields = ["received", "completed"];
+    private static readonly string[] CounterRevenueFields = ["received", "completed", "amountPaise"];
     private static readonly string[] RevenueFields = ["received", "amountPaise"];
     private static readonly string[] FieldWorkFields = ["completed"];
 
     public static IReadOnlyList<string> CollectedFields(int serviceId) => FormShape(serviceId) switch
     {
+        MonitoringFormShape.CounterRevenue => CounterRevenueFields,
         MonitoringFormShape.Revenue => RevenueFields,
         MonitoringFormShape.FieldWork => FieldWorkFields,
         _ => CounterFields,

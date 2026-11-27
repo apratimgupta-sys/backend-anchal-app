@@ -19,7 +19,7 @@ public sealed class FieldWorkEntryRulesTests
     // drain, grass cutting, tree pruning, water body cleaning.
     public static TheoryData<int> FieldWork => new(8, 9, 10, 13, 14, 15, 16, 17);
 
-    // Counter shape: everything that is neither field work nor revenue (2, 5, 6).
+    // Counter work (counter and counterRevenue shapes): everything that is neither field work nor revenue (2, 5, 6).
     public static TheoryData<int> CounterShape =>
         new(1, 3, 4, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
 
@@ -142,7 +142,8 @@ public sealed class FieldWorkEntryRulesTests
     [Fact] public void ShapesCoverAllTwentyFiveServicesWithTheExpectedCounts() {
         var byShape = Enumerable.Range(1, 25).GroupBy(MonitoringRules.FormShape)
             .ToDictionary(g => g.Key, g => g.Count());
-        Assert.Equal(14, byShape[MonitoringFormShape.Counter]);
+        Assert.Equal(10, byShape[MonitoringFormShape.Counter]);
+        Assert.Equal(4, byShape[MonitoringFormShape.CounterRevenue]);
         Assert.Equal(3, byShape[MonitoringFormShape.Revenue]);
         Assert.Equal(8, byShape[MonitoringFormShape.FieldWork]); }
 

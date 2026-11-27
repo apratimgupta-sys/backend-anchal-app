@@ -23,4 +23,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="CommissionerMonitoring/Domain/shape-twin.fixture.json" Link="shape-twin.fixture.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -108,7 +108,8 @@ public sealed class NothingToReportTests
     [Theory]
     [InlineData(1, "slaWithinTime")]
     [InlineData(1, "complaintsReceived")]
-    [InlineData(1, "amountPaise")]
+    // Service 1 collects the amount since the fourth shape; 11 is still a counter service that does not.
+    [InlineData(11, "amountPaise")]
     [InlineData(1, "fieldReceived")]
     [InlineData(12, "complaintsReceived")]
     [InlineData(12, "complaintsResolved")]

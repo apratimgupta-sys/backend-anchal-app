@@ -238,7 +238,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             // Received, completed and pending are counter-shape figures: revenue has payments rather than cases
             // closed, and field work has work done rather than a queue. Summing them in would push the disposal
             // ratio past 100% (field work completes against a received of 0). Field work gets its own figure.
-            var counter = period.Where(x => MonitoringRules.FormShape(x.Input.ServiceId) == MonitoringFormShape.Counter).ToArray();
+            var counter = period.Where(x => MonitoringRules.MovesPendingBalance(x.Input.ServiceId)).ToArray();
             var received = counter.Sum(x => x.Input.Received);
             var completed = counter.Sum(x => x.Input.Completed);
             var workDone = period.Where(x => MonitoringRules.IsFieldWork(x.Input.ServiceId)).Sum(x => x.Input.Completed);
@@ -249,7 +249,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 var closing = filter.To < setup.StartDate ? new Balances(0, 0, 0)
                     : entries.Where(x => x.Input.ServiceId == balance.ServiceId && x.Input.ServiceDate <= filter.To)
                         .OrderBy(x => x.Input.ServiceDate).LastOrDefault()?.Closing ?? balance.Opening;
-                if (MonitoringRules.FormShape(balance.ServiceId) == MonitoringFormShape.Counter) pending += closing.Service;
+                if (MonitoringRules.MovesPendingBalance(balance.ServiceId)) pending += closing.Service;
                 complaints += closing.Complaints; field += closing.Field;
             }
             double? disposalPct = received == 0 ? null : (double)completed / received * 100;

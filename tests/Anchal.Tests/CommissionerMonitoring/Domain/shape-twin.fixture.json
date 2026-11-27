@@ -1,0 +1,13 @@
+{
+  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract.",
+  "shapes": {
+    "1": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
+    "3": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
+    "4": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
+    "7": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
+    "2": { "shape": "revenue", "collected": ["received", "amountPaise"], "movesPendingBalance": false },
+    "11": { "shape": "counter", "collected": ["received", "completed"], "movesPendingBalance": true },
+    "12": { "shape": "counter", "collected": ["received", "completed"], "movesPendingBalance": true },
+    "15": { "shape": "fieldwork", "collected": ["completed"], "movesPendingBalance": false }
+  }
+}
