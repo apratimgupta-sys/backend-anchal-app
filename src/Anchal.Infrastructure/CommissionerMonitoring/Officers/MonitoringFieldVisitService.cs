@@ -197,12 +197,15 @@ public sealed class MonitoringFieldVisitService(
     /// {"v":1, ...} in the definition's own order, or null when nothing was filled in. Every problem
     /// is reported at once, keyed "input.details.<key>", so the form can mark each field. A blank
     /// value (null, or text that is only whitespace) is the same as leaving the field out.
-    private static string? ValidateDetails(FieldVisitInputDto input)
+    private static string? ValidateDetails(FieldVisitInputDto input) =>
+        ValidateDetails(input, MonitoringFieldDefinitions.For(input.ServiceId));
+
+    /// The definitions are a parameter so that a malformed one can be tried; the visit passes the service's own.
+    public static string? ValidateDetails(FieldVisitInputDto input, IReadOnlyList<VisitFieldDefinition> fields)
     {
         var details = input.Details;
         if (details is null || details.Count == 0) return null;
 
-        var fields = MonitoringFieldDefinitions.For(input.ServiceId);
         var errors = new Dictionary<string, string>();
         var accepted = new Dictionary<string, object>();
         foreach (var (key, value) in details)
@@ -222,7 +225,7 @@ public sealed class MonitoringFieldVisitService(
                 "number" when field.Integer => TryNumber(value, out var count) && IsWhole(count)
                     ? Accept(accepted, key, count) : "Enter a whole number from 0 to 1,000,000,000",
                 "number" => TryNumber(value, out var number) ? Accept(accepted, key, number) : "Enter a number from 0 to 1,000,000,000",
-                "select" => value.ValueKind == JsonValueKind.String && field.Options!.Contains(value.GetString()!)
+                "select" => value.ValueKind == JsonValueKind.String && field.Options is { } options && options.Contains(value.GetString()!)
                     ? Accept(accepted, key, value.GetString()!) : "Select one of the listed options",
                 _ => TryText(value, field.Type == "textarea" ? DetailsTextAreaMaximumLength : DetailsTextMaximumLength, out var text, out var error)
                     ? Accept(accepted, key, text) : error
@@ -284,9 +287,10 @@ public sealed class MonitoringFieldVisitService(
         return false;
     }
 
-    // Keys the HTTP adapter rewrites wherever it finds them in a payload (officeId, officeCode, input);
-    // a stored details key of that name would be rewritten, or fail the whole list, so it is not read.
-    private static readonly HashSet<string> ReservedDetailKeys = new(StringComparer.Ordinal) { "officeId", "officeCode", "input" };
+    // Keys the HTTP adapter rewrites wherever it finds them in a payload; a stored details key of that
+    // name would be rewritten, or fail the whole list, so it is not read. The adapter takes the same
+    // names from MonitoringPayloadKeys, so the two cannot be edited apart.
+    private static readonly IReadOnlySet<string> ReservedDetailKeys = MonitoringPayloadKeys.All;
 
     /// Reads the stored details for display, whatever they hold. This never throws: a row of a version
     /// this code has never heard of, malformed text, a non-object, or a value of an unexpected type each

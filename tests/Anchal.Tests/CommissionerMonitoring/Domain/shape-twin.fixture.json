@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract. serviceNames is the Hindi service master: the frontend asserts services.json against it, the backend asserts the names MonitoringProvisioner seeds. Renaming a service means editing this file, services.json and ServiceNames together. fieldVisitFields is the per-service visit form structure (key, type, required, option values, in order) for the eight field-work services: the frontend asserts src/shared/field-visit-fields.json against it, the backend asserts MonitoringFieldDefinitions. An integer:true field takes a whole number only (the three counts: dogsPicked, dogsNeutered, treeCount); the form's input and the server's validation both follow it. Labels and Hindi are frontend-only and not in this file. Changing a field means editing this file, field-visit-fields.json and MonitoringFieldDefinitions together.",
+  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract. serviceNames is the Hindi service master: the frontend asserts services.json against it, the backend asserts the names MonitoringProvisioner seeds. Renaming a service means editing this file, services.json and ServiceNames together. fieldVisitFields is the per-service visit form structure (key, type, integer marker, option values, in order; every field is optional and none carries a required flag, because nothing honours one) for the eight field-work services: the frontend asserts src/shared/field-visit-fields.json against it, the backend asserts MonitoringFieldDefinitions. An integer:true field takes a whole number only (the three counts: dogsPicked, dogsNeutered, treeCount); the form's input and the server's validation both follow it. Labels and Hindi are frontend-only and not in this file. Changing a field means editing this file, field-visit-fields.json and MonitoringFieldDefinitions together. A unit change is a NEW key, never a label edit: a label is read from today's definition for every row ever filed. fieldVisitBounds is the limit a details value is held to (text, text area, number): the frontend asserts src/shared/field-visit-bounds.json against it, the backend asserts MonitoringFieldVisitService.Details* against it.",
   "shapes": {
     "1": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
     "3": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
@@ -37,48 +37,49 @@
     "24": "Lodge/Hostel/Banquet Hall Licence",
     "25": "Community Hall Booking"
   },
+  "fieldVisitBounds": {"textMax": 200, "textAreaMax": 2000, "numberMax": 1000000000},
   "fieldVisitFields": {
     "8": [
-      {"key": "vehicleLabour", "type": "text", "required": false},
-      {"key": "street", "type": "text", "required": false},
-      {"key": "wasteType", "type": "select", "required": false, "options": ["wet", "dry", "mixed"]},
-      {"key": "quantityKg", "type": "number", "required": false}
+      {"key": "vehicleLabour", "type": "text"},
+      {"key": "street", "type": "text"},
+      {"key": "wasteType", "type": "select", "options": ["wet", "dry", "mixed"]},
+      {"key": "quantityKg", "type": "number"}
     ],
     "9": [
-      {"key": "team", "type": "text", "required": false},
-      {"key": "vehicleNumber", "type": "text", "required": false},
-      {"key": "street", "type": "text", "required": false},
-      {"key": "route", "type": "text", "required": false}
+      {"key": "team", "type": "text"},
+      {"key": "vehicleNumber", "type": "text"},
+      {"key": "street", "type": "text"},
+      {"key": "route", "type": "text"}
     ],
     "10": [
-      {"key": "teamLabour", "type": "text", "required": false},
-      {"key": "dogsPicked", "type": "number", "required": false, "integer": true},
-      {"key": "dogsNeutered", "type": "number", "required": false, "integer": true},
-      {"key": "actionLocation", "type": "text", "required": false}
+      {"key": "teamLabour", "type": "text"},
+      {"key": "dogsPicked", "type": "number", "integer": true},
+      {"key": "dogsNeutered", "type": "number", "integer": true},
+      {"key": "actionLocation", "type": "text"}
     ],
     "13": [
-      {"key": "technician", "type": "text", "required": false},
-      {"key": "street", "type": "text", "required": false},
-      {"key": "poleNumber", "type": "text", "required": false},
-      {"key": "workType", "type": "select", "required": false, "options": ["repair", "replace", "shift"]}
+      {"key": "technician", "type": "text"},
+      {"key": "street", "type": "text"},
+      {"key": "poleNumber", "type": "text"},
+      {"key": "workType", "type": "select", "options": ["repair", "replace", "shift"]}
     ],
     "14": [
-      {"key": "street", "type": "text", "required": false},
-      {"key": "structureType", "type": "select", "required": false, "options": ["road", "drain"]},
-      {"key": "lengthMetres", "type": "number", "required": false}
+      {"key": "street", "type": "text"},
+      {"key": "structureType", "type": "select", "options": ["road", "drain"]},
+      {"key": "lengthMetres", "type": "number"}
     ],
     "15": [
-      {"key": "reportingOfficer", "type": "text", "required": false},
-      {"key": "areaCutSqMetres", "type": "number", "required": false}
+      {"key": "reportingOfficer", "type": "text"},
+      {"key": "areaCutSqMetres", "type": "number"}
     ],
     "16": [
-      {"key": "vehicle", "type": "text", "required": false},
-      {"key": "team", "type": "text", "required": false},
-      {"key": "street", "type": "text", "required": false},
-      {"key": "treeCount", "type": "number", "required": false, "integer": true}
+      {"key": "vehicle", "type": "text"},
+      {"key": "team", "type": "text"},
+      {"key": "street", "type": "text"},
+      {"key": "treeCount", "type": "number", "integer": true}
     ],
     "17": [
-      {"key": "team", "type": "text", "required": false}
+      {"key": "team", "type": "text"}
     ]
   }
 }

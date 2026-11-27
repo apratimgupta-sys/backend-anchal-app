@@ -150,6 +150,10 @@ public sealed class FieldVisitDetailsTests
     [Theory]
     [InlineData("\"abc\"")]
     [InlineData("\"12kg\"")]
+    // What the form sends when a typed number does not fit a double: the text as typed (M1).
+    [InlineData("\"1e999\"")]
+    [InlineData("\"-1e999\"")]
+    [InlineData("1e999")]
     [InlineData("-1")]
     [InlineData("1000000001")]
     [InlineData("true")]
@@ -419,6 +423,50 @@ public sealed class FieldVisitDetailsTests
         var details = row.GetProperty("details");
         Assert.Equal("Main lane", details.GetProperty("street").GetString());
         Assert.Single(details.EnumerateObject());
+    }
+
+    // M6: every key the adapter rewrites is reserved, and a stored details key of that name is not read.
+    public static TheoryData<string> ReservedKeys() => new(MonitoringPayloadKeys.All.ToArray());
+
+    [Theory]
+    [MemberData(nameof(ReservedKeys))]
+    public void ReadDetailsDropsEveryKeyTheAdapterRewrites(string key)
+    {
+        var read = MonitoringFieldVisitService.ReadDetails($@"{{""v"":1,""{key}"":""x"",""street"":""Main lane""}}");
+        Assert.NotNull(read);
+        Assert.False(read!.ContainsKey(key));
+        Assert.Equal("Main lane", read["street"]);
+    }
+
+    // The set is the adapter's own constants (it rewrites by MonitoringPayloadKeys.*, not by literal),
+    // so a key added there without joining All is caught here, by reflection over the class.
+    [Fact]
+    public void EveryNameDeclaredAsRewrittenIsInTheReservedSet()
+    {
+        var declared = typeof(MonitoringPayloadKeys).GetFields()
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Assert.Equal(declared, MonitoringPayloadKeys.All.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+        Assert.Equal(new[] { "input", "officeCode", "officeId" }, declared);
+    }
+
+    // M4: a select whose option list is missing is a broken definition. It must come out as a 422 on that
+    // field, as every other refusal does, not as a NullReferenceException from inside the request.
+    [Fact]
+    public void ASelectDefinitionWithNoOptionListRefusesTheValueRatherThanThrowing()
+    {
+        var input = new FieldVisitInputDto(DateOnly.Parse("2026-11-27"), "10:00", 3, 24, 8,
+            new GpsReadingDto(23.3, 85.3, 10, DateTimeOffset.UtcNow), Observation)
+        {
+            Details = new Dictionary<string, JsonElement> { ["wasteType"] = JsonSerializer.SerializeToElement("wet") }
+        };
+        var broken = new[] { new VisitFieldDefinition("wasteType", "select", null) };
+
+        var thrown = Assert.Throws<MonitoringRuleException>(() => MonitoringFieldVisitService.ValidateDetails(input, broken));
+
+        Assert.Equal(422, thrown.Status);
+        Assert.Equal("Select one of the listed options", thrown.Error.FieldErrors!["input.details.wasteType"]);
     }
 
     [Theory]
