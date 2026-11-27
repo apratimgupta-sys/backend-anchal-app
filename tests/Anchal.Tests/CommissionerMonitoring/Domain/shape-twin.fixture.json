@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract.",
+  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract. serviceNames is the Hindi service master: the frontend asserts services.json against it, the backend asserts the names MonitoringProvisioner seeds. Renaming a service means editing this file, services.json and ServiceNames together.",
   "shapes": {
     "1": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
     "3": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
@@ -9,5 +9,32 @@
     "11": { "shape": "counter", "collected": ["received", "completed"], "movesPendingBalance": true },
     "12": { "shape": "counter", "collected": ["received", "completed"], "movesPendingBalance": true },
     "15": { "shape": "fieldwork", "collected": ["completed"], "movesPendingBalance": false }
+  },
+  "serviceNames": {
+    "1": "नए होल्डिंग आवेदन की रिपोर्टिंग (SAF)",
+    "2": "Holding Tax का भुगतान",
+    "3": "नगर निगम व्यापार लाइसेंस आवेदन की रिपोर्टिंग",
+    "4": "नए जल संयोजन आवेदन की रिपोर्टिंग",
+    "5": "Water User Charge का भुगतान",
+    "6": "Waste User Charge का भुगतान",
+    "7": "डेटा सुधार आवेदन की रिपोर्टिंग",
+    "8": "घर पर कचरा वाहन की सेवा से संबंधित",
+    "9": "Fogging से संबंधित",
+    "10": "Street Dog से संबंधित",
+    "11": "जन्म एवं मृत्यु निबंधन की रिपोर्टिंग",
+    "12": "जन शिकायत आवेदन की रिपोर्टिंग",
+    "13": "पथ बत्ती",
+    "14": "सड़क एवं नाली निर्माण से संबंधित",
+    "15": "Grass Cutting",
+    "16": "Tree Pruning",
+    "17": "Water Bodies के सफाई से संबंधित",
+    "18": "प्रधान मंत्री आवास योजना",
+    "19": "SSG Group",
+    "20": "Vendor Licence",
+    "21": "PM SVANidhi Licence",
+    "22": "Revolving Fund",
+    "23": "Self Employment Programme",
+    "24": "Lodge/Hostel/Banquet Hall Licence",
+    "25": "Community Hall Booking"
   }
 }

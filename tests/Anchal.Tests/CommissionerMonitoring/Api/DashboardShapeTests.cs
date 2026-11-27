@@ -28,6 +28,19 @@ public sealed class DashboardShapeTests
         Assert.Equal(9, row.Pending);
     }
 
+    // Break caught: narrowing MovesPendingBalance to CounterRevenue alone. Service 1, which every other fixture here
+    // files on, is counter-and-money, so only a plain counter service (11) pins the ten that are not: its opening of 3
+    // and its 6 received / 2 completed must reach pending (9 + 3 + 6 - 2), received and completed.
+    [Fact]
+    public async Task APlainCounterServiceReachesTheRollUp()
+    {
+        await using var f = await Fixture.Create(plainCounter: true);
+        var row = await f.Row(Day1, Day1);
+        Assert.Equal(16, row.Pending);
+        Assert.Equal(16, row.Received);
+        Assert.Equal(7, row.Completed);
+    }
+
     // Break caught: field work contributes completed against received of 0, so completed/received was 15/13 = 115% with all services summed.
     [Fact]
     public async Task DisposalPercentageNeverExceedsOneHundred()
@@ -124,7 +137,7 @@ public sealed class DashboardShapeTests
         }
 
         public static async Task<Fixture> Create(long counterOpening = 4, long counterReceived = 10, long counterCompleted = 5,
-            long legacyComplaints = 0, long legacyField = 0, long counterSla = 0, long legacySla = 0)
+            long legacyComplaints = 0, long legacyField = 0, long counterSla = 0, long legacySla = 0, bool plainCounter = false)
         {
             var f = new Fixture();
             f.Db.Offices.Add(new MonitoringOffice { Id = f.office, Code = "anchal1", Name = "Anchal 1" });
@@ -135,14 +148,15 @@ public sealed class DashboardShapeTests
                 Id = Guid.NewGuid(), Key = x.ToString(), Name = $"Service {x}", Kind = MonitoringActivityKind.Service, SortOrder = x }));
             await f.Db.SaveChangesAsync();
 
-            // Service 1 is counter, 2 is revenue, 8 and 9 are field work. The non-counter openings are
-            // nonzero on purpose: the old sums counted them.
+            // Service 1 is counter-and-money, 11 plain counter, 2 revenue, 8 and 9 field work. The non-queue openings
+            // are nonzero on purpose: the old sums counted them.
             var openings = Enumerable.Range(1, 25).Select(x => new OpeningBalanceDto(x,
-                x == 1 ? new(counterOpening, 0, 0) : x == 2 ? new(50, 0, 0) : x == 8 ? new(20, 0, 0) : new(0, 0, 0))).ToArray();
+                x == 1 ? new(counterOpening, 0, 0) : x == 11 && plainCounter ? new(3, 0, 0) : x == 2 ? new(50, 0, 0) : x == 8 ? new(20, 0, 0) : new(0, 0, 0))).ToArray();
             var setup = await f.Service.SaveSetupAsync(Principal(f.user, f.office), new("setup-request", null, Day1, openings));
             Assert.True(setup.IsSuccess, setup.Error?.Message);
 
             await f.Save(new(1, Day1, "Ward 1", counterReceived, counterCompleted, counterSla, 0, legacyComplaints, 0, legacyField, 0, null, ""));
+            if (plainCounter) await f.Save(new(11, Day1, "Ward 1", 6, 2, 0, 0, 0, 0, 0, 0, null, ""));
             await f.Save(new(2, Day1, "Ward 1", 3, 0, legacySla, 900, 0, 0, 0, 0, null, ""));
             await f.Save(new(8, Day1, "Ward 1", 0, 7, legacySla, 0, 0, 0, 0, 0, null, ""));
             await f.Save(new(9, Day1, "Ward 1", 0, 3, 0, 0, 0, 0, 0, 0, null, ""));

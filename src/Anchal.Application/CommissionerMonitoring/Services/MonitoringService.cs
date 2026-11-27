@@ -235,13 +235,16 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             }
             var entries = Views(setup, all.Where(x => x.OfficeId == office.Id).ToArray());
             var period = Filter(entries, filter);
-            // Received, completed and pending are counter-shape figures: revenue has payments rather than cases
-            // closed, and field work has work done rather than a queue. Summing them in would push the disposal
-            // ratio past 100% (field work completes against a received of 0). Field work gets its own figure.
+            // Received, completed and pending come only from the services that keep a queue (MovesPendingBalance:
+            // counter and counter-and-money): revenue has payments rather than cases closed, and field work has work
+            // done rather than a queue. Summing them in would push the disposal ratio past 100% (field work completes
+            // against a received of 0). Work done is the other side: services that collect `completed` and no `received`.
             var counter = period.Where(x => MonitoringRules.MovesPendingBalance(x.Input.ServiceId)).ToArray();
             var received = counter.Sum(x => x.Input.Received);
             var completed = counter.Sum(x => x.Input.Completed);
-            var workDone = period.Where(x => MonitoringRules.IsFieldWork(x.Input.ServiceId)).Sum(x => x.Input.Completed);
+            var workDone = period.Where(x => MonitoringRules.Collects(x.Input.ServiceId, "completed")
+                    && !MonitoringRules.Collects(x.Input.ServiceId, "received"))
+                .Sum(x => x.Input.Completed);
             var sla = counter.Sum(x => x.Input.SlaWithinTime);
             long pending = 0, complaints = 0, field = 0;
             foreach (var balance in setup.Balances.Where(x => !filter.ServiceId.HasValue || x.ServiceId == filter.ServiceId))

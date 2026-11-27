@@ -15,14 +15,16 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
         ["anchal1", "anchal2", "anchal3", "anchal4", "anchal5", "anchal6", "commissioner", "rolemanager"];
 
     // Copied from the approved Cloudflare monitoring service catalog, keyed by its stable service ID.
+    // TWIN: name in src/shared/services.json in the frontend repo. Both are asserted against "serviceNames" in
+    // shape-twin.fixture.json, so a rename must be made in all three; the fixture is committed in both repos.
     private static readonly string[] ServiceNames =
     [
-        "नए होल्डिंग प्राप्त करने हेतु आवेदन", "Holding Tax का भुगतान",
-        "Municipal Trade Licence के लिए आवेदन", "New जल संयोजन के लिए आवेदन",
+        "नए होल्डिंग आवेदन की रिपोर्टिंग (SAF)", "Holding Tax का भुगतान",
+        "नगर निगम व्यापार लाइसेंस आवेदन की रिपोर्टिंग", "नए जल संयोजन आवेदन की रिपोर्टिंग",
         "Water User Charge का भुगतान", "Waste User Charge का भुगतान",
-        "होल्डिंग में त्रुटि सुधार", "घर पर कचरा वाहन की सेवा से संबंधित",
-        "Fogging से संबंधित", "Street Dog से संबंधित", "जन्म एवं मृत्यु निबंधन",
-        "जन शिकायत", "पथ बत्ती", "सड़क एवं नाली निर्माण से संबंधित",
+        "डेटा सुधार आवेदन की रिपोर्टिंग", "घर पर कचरा वाहन की सेवा से संबंधित",
+        "Fogging से संबंधित", "Street Dog से संबंधित", "जन्म एवं मृत्यु निबंधन की रिपोर्टिंग",
+        "जन शिकायत आवेदन की रिपोर्टिंग", "पथ बत्ती", "सड़क एवं नाली निर्माण से संबंधित",
         "Grass Cutting", "Tree Pruning", "Water Bodies के सफाई से संबंधित",
         "प्रधान मंत्री आवास योजना", "SSG Group", "Vendor Licence",
         "PM SVANidhi Licence", "Revolving Fund", "Self Employment Programme",

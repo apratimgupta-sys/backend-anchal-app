@@ -134,10 +134,30 @@ public sealed class MonitoringAuthTests
         Assert.Equal(6, await db.UserOffices.CountAsync());
         Assert.Equal(25, await db.CatalogItems.CountAsync());
         Assert.Equal(firstHash, (await db.Users.SingleAsync(x => x.LoginName == "anchal1")).PasswordHash);
-        Assert.Equal("नए होल्डिंग प्राप्त करने हेतु आवेदन",
+        Assert.Equal("नए होल्डिंग आवेदन की रिपोर्टिंग (SAF)",
             (await db.CatalogItems.SingleAsync(x => x.Key == "1")).Name);
         Assert.Equal("Community Hall Booking",
             (await db.CatalogItems.SingleAsync(x => x.Key == "25")).Name);
+    }
+
+    // The Hindi service master is a hand-kept twin of the frontend's services.json, and the provisioner
+    // re-writes catalog rows from its own copy on every run. The same golden table (shape-twin.fixture.json,
+    // "serviceNames") is committed in the frontend repo, which asserts services.json against it; this asserts
+    // the names the provisioner actually seeds, so a rename on either side alone goes red in that repo.
+    [Fact]
+    public async Task TheSeededServiceNamesMatchTheGoldenTwinFixture()
+    {
+        await using var provider = await ProvisionedServices();
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>();
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "shape-twin.fixture.json")));
+        var golden = doc.RootElement.GetProperty("serviceNames").EnumerateObject()
+            .ToDictionary(p => p.Name, p => p.Value.GetString()!);
+        var seeded = await db.CatalogItems.ToDictionaryAsync(x => x.Key, x => x.Name);
+
+        Assert.Equal(25, golden.Count);
+        Assert.Equal(golden.OrderBy(p => p.Key, StringComparer.Ordinal), seeded.OrderBy(p => p.Key, StringComparer.Ordinal));
     }
 
     [Fact]
