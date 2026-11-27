@@ -22,7 +22,7 @@ public static class MonitoringFieldDefinitions
             new("vehicleLabour", "text", false, null),
             new("street", "text", false, null),
             new("wasteType", "select", false, ["wet", "dry", "mixed"]),
-            new("quantity", "number", false, null),
+            new("quantityKg", "number", false, null),
         ],
         [9] = [
             new("team", "text", false, null),
@@ -45,11 +45,11 @@ public static class MonitoringFieldDefinitions
         [14] = [
             new("street", "text", false, null),
             new("structureType", "select", false, ["road", "drain"]),
-            new("length", "number", false, null),
+            new("lengthMetres", "number", false, null),
         ],
         [15] = [
             new("reportingOfficer", "text", false, null),
-            new("areaCut", "number", false, null),
+            new("areaCutSqMetres", "number", false, null),
         ],
         [16] = [
             new("vehicle", "text", false, null),

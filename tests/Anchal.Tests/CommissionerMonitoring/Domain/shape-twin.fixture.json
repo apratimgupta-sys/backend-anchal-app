@@ -42,7 +42,7 @@
       {"key": "vehicleLabour", "type": "text", "required": false},
       {"key": "street", "type": "text", "required": false},
       {"key": "wasteType", "type": "select", "required": false, "options": ["wet", "dry", "mixed"]},
-      {"key": "quantity", "type": "number", "required": false}
+      {"key": "quantityKg", "type": "number", "required": false}
     ],
     "9": [
       {"key": "team", "type": "text", "required": false},
@@ -65,11 +65,11 @@
     "14": [
       {"key": "street", "type": "text", "required": false},
       {"key": "structureType", "type": "select", "required": false, "options": ["road", "drain"]},
-      {"key": "length", "type": "number", "required": false}
+      {"key": "lengthMetres", "type": "number", "required": false}
     ],
     "15": [
       {"key": "reportingOfficer", "type": "text", "required": false},
-      {"key": "areaCut", "type": "number", "required": false}
+      {"key": "areaCutSqMetres", "type": "number", "required": false}
     ],
     "16": [
       {"key": "vehicle", "type": "text", "required": false},

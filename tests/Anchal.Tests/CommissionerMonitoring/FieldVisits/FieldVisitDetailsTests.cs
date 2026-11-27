@@ -61,7 +61,7 @@ public sealed class FieldVisitDetailsTests
 
         using var response = await Post(host, Input(8, new Dictionary<string, object>
         {
-            ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Main lane", ["wasteType"] = "wet", ["quantity"] = 12.5
+            ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Main lane", ["wasteType"] = "wet", ["quantityKg"] = 12.5
         }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -70,12 +70,12 @@ public sealed class FieldVisitDetailsTests
         Assert.Equal("Tipper 4, two labourers", details.GetProperty("vehicleLabour").GetString());
         Assert.Equal("Main lane", details.GetProperty("street").GetString());
         Assert.Equal("wet", details.GetProperty("wasteType").GetString());
-        Assert.Equal(12.5, details.GetProperty("quantity").GetDouble());
+        Assert.Equal(12.5, details.GetProperty("quantityKg").GetDouble());
         Assert.False(details.TryGetProperty("v", out _));
 
         using var stored = JsonDocument.Parse((await StoredDetails(host, visit.GetProperty("id").GetGuid()))!);
         Assert.Equal(1, stored.RootElement.GetProperty("v").GetInt32());
-        Assert.Equal(12.5, stored.RootElement.GetProperty("quantity").GetDouble());
+        Assert.Equal(12.5, stored.RootElement.GetProperty("quantityKg").GetDouble());
 
         var list = await host.Client.GetFromJsonAsync<JsonElement>(Root + $"/field-visits?from={Today()}&to={Today()}");
         Assert.Equal("wet", list.GetProperty("rows")[0].GetProperty("details").GetProperty("wasteType").GetString());
@@ -103,7 +103,7 @@ public sealed class FieldVisitDetailsTests
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await Post(host, Input(8, new Dictionary<string, object> { ["street"] = "   ", ["quantity"] = "" }));
+        using var response = await Post(host, Input(8, new Dictionary<string, object> { ["street"] = "   ", ["quantityKg"] = "" }));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -159,10 +159,10 @@ public sealed class FieldVisitDetailsTests
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await PostRaw(host, 8, $@"{{""quantity"":{literal}}}");
+        using var response = await PostRaw(host, 8, $@"{{""quantityKg"":{literal}}}");
 
         var errors = await Rejected(response);
-        Assert.Equal("Enter a number from 0 to 1,000,000,000", errors.GetProperty("input.details.quantity").GetString());
+        Assert.Equal("Enter a number from 0 to 1,000,000,000", errors.GetProperty("input.details.quantityKg").GetString());
     }
 
     [Theory]
@@ -206,11 +206,11 @@ public sealed class FieldVisitDetailsTests
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await PostRaw(host, 8, $@"{{""quantity"":{literal}}}");
+        using var response = await PostRaw(host, 8, $@"{{""quantityKg"":{literal}}}");
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(expected, visit.GetProperty("details").GetProperty("quantity").GetDouble());
+        Assert.Equal(expected, visit.GetProperty("details").GetProperty("quantityKg").GetDouble());
     }
 
     [Theory]
@@ -276,7 +276,7 @@ public sealed class FieldVisitDetailsTests
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await PostRaw(host, 8, @"{""wasteType"":""x"",""quantity"":""y"",""nope"":""z""}");
+        using var response = await PostRaw(host, 8, @"{""wasteType"":""x"",""quantityKg"":""y"",""nope"":""z""}");
 
         var errors = await Rejected(response);
         Assert.Equal(3, errors.EnumerateObject().Count(p => p.Name.StartsWith("input.details.")));
@@ -390,13 +390,13 @@ public sealed class FieldVisitDetailsTests
         await using var host = await Create();
         var officer = await host.SignInAsOfficer();
         await PlantRow(host, officer.GetProperty("id").GetGuid(),
-            @"{""v"":2,""street"":""Main lane"",""quantity"":7,""wasteType"":{""kind"":""wet""},""extra"":[1,2],""flag"":true,""gone"":null}");
+            @"{""v"":2,""street"":""Main lane"",""quantityKg"":7,""wasteType"":{""kind"":""wet""},""extra"":[1,2],""flag"":true,""gone"":null}");
 
         var row = await ListSingle(host);
 
         var details = row.GetProperty("details");
         Assert.Equal("Main lane", details.GetProperty("street").GetString());
-        Assert.Equal(7, details.GetProperty("quantity").GetInt32());
+        Assert.Equal(7, details.GetProperty("quantityKg").GetInt32());
         Assert.False(details.TryGetProperty("wasteType", out _));
         Assert.False(details.TryGetProperty("extra", out _));
         Assert.False(details.TryGetProperty("flag", out _));
@@ -459,10 +459,10 @@ public sealed class FieldVisitDetailsTests
     [Fact]
     public void TheReaderSurvivesAnAbsurdValueWithoutThrowing()
     {
-        var read = MonitoringFieldVisitService.ReadDetails(@"{""v"":2,""quantity"":1e999,""big"":123456789012345678901234567890,""street"":""ok""}");
+        var read = MonitoringFieldVisitService.ReadDetails(@"{""v"":2,""quantityKg"":1e999,""big"":123456789012345678901234567890,""street"":""ok""}");
 
         Assert.NotNull(read);
         Assert.Equal("ok", read!["street"]);
-        Assert.False(read.ContainsKey("quantity"));
+        Assert.False(read.ContainsKey("quantityKg"));
     }
 }
