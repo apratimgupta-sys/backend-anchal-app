@@ -339,6 +339,105 @@ public sealed class FieldVisitDetailsTests
         Assert.Equal(legacyId, visit.GetProperty("id").GetGuid());
     }
 
+    // ---- idempotency with details: the case this column introduced ------------------------------
+    // The fingerprint is the hash of the serialised input, and Details is left out of it while null
+    // (so a legacy request still replays). These pin the other side: once details are present they are
+    // part of what a request id stands for.
+
+    private static async Task<int> RowsFor(MonitoringTestHost host, string requestId)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>();
+        return await db.FieldVisits.AsNoTracking().CountAsync(x => x.RequestId == requestId);
+    }
+
+    private static Dictionary<string, object> Fogging() => new() { ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Main lane", ["wasteType"] = "wet", ["quantityKg"] = 12.5 };
+
+    [Fact]
+    public async Task ReplayingAVisitThatCarriesDetailsReturnsTheOriginalWithTheDetailsIntactAndStoresNoSecondRow()
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+        var requestId = Guid.NewGuid().ToString("N");
+        // One input object, built once: Input() stamps the capture time when it is called.
+        var input = Input(8, Fogging());
+
+        using var first = await Post(host, input, requestId);
+        using var replay = await Post(host, input, requestId);
+
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
+        var one = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var two = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(one.GetProperty("id").GetGuid(), two.GetProperty("id").GetGuid());
+        Assert.Equal(one.GetProperty("details").GetRawText(), two.GetProperty("details").GetRawText());
+        Assert.Equal("Main lane", two.GetProperty("details").GetProperty("street").GetString());
+        Assert.Equal(12.5, two.GetProperty("details").GetProperty("quantityKg").GetDouble());
+        Assert.Equal(1, await RowsFor(host, requestId));
+        var list = await host.Client.GetFromJsonAsync<JsonElement>(Root + $"/field-visits?from={Today()}&to={Today()}");
+        Assert.Equal(1, list.GetProperty("total").GetInt32());
+    }
+
+    /// The conflict path is the one every other changed field takes: the fingerprint is compared before
+    /// anything is validated, so the answer is 409 CONFLICT "already used for different data" — even when
+    /// the changed details would themselves be refused with a 422 — and the stored visit is not touched.
+    public static TheoryData<string, Func<Dictionary<string, object?>>> ChangedDetails() => new()
+    {
+        { "a value changed", () => Input(8, new Dictionary<string, object> { ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Other lane", ["wasteType"] = "wet", ["quantityKg"] = 12.5 }) },
+        { "a figure changed", () => Input(8, new Dictionary<string, object> { ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Main lane", ["wasteType"] = "wet", ["quantityKg"] = 13 }) },
+        { "a key added", () => Input(8, new Dictionary<string, object> { ["vehicleLabour"] = "Tipper 4, two labourers", ["street"] = "Main lane", ["wasteType"] = "wet", ["quantityKg"] = 12.5, ["junk"] = "x" }) },
+        { "a key removed", () => Input(8, new Dictionary<string, object> { ["street"] = "Main lane" }) },
+        { "the details dropped", () => Input(8, null, withDetails: false) },
+    };
+
+    [Theory]
+    [MemberData(nameof(ChangedDetails))]
+    public async Task ReusingARequestIdWithDifferentDetailsIsRefusedAsConflictAndTheStoredVisitIsUntouched(
+        string _, Func<Dictionary<string, object?>> changed)
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+        var requestId = Guid.NewGuid().ToString("N");
+        var original = Input(8, Fogging());
+        using var first = await Post(host, original, requestId);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var stored = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var id = stored.GetProperty("id").GetGuid();
+        var storedText = await StoredDetails(host, id);
+
+        // The retry differs only in its details: same time, same capture, same everything else.
+        var retry = changed();
+        retry["visitDate"] = original["visitDate"];
+        retry["gps"] = original["gps"];
+        using var response = await Post(host, retry, requestId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CONFLICT", body.GetProperty("code").GetString());
+        Assert.Equal("This request identifier was already used for different data", body.GetProperty("message").GetString());
+        Assert.Equal(1, await RowsFor(host, requestId));
+        Assert.Equal(storedText, await StoredDetails(host, id));
+    }
+
+    [Fact]
+    public async Task ReusingARequestIdThatFiledNoDetailsForOneThatCarriesThemIsAlsoAConflict()
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+        var requestId = Guid.NewGuid().ToString("N");
+        var plain = Input(8, null, withDetails: false);
+        using var first = await Post(host, plain, requestId);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var withDetails = Input(8, Fogging());
+        withDetails["gps"] = plain["gps"];
+        using var retry = await Post(host, withDetails, requestId);
+
+        Assert.Equal(HttpStatusCode.Conflict, retry.StatusCode);
+        Assert.Equal(1, await RowsFor(host, requestId));
+        Assert.Null(await StoredDetails(host, (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid()));
+    }
+
     // ---- the read side: whatever is stored, listing never throws -------------------------------
 
     private static async Task<HttpResponseMessage> PostRaw(MonitoringTestHost host, int serviceId, string detailsJson)
