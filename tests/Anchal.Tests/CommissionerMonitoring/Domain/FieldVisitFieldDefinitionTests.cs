@@ -32,9 +32,10 @@ public sealed class FieldVisitFieldDefinitionTests
                 Key: f.GetProperty("key").GetString()!,
                 Type: f.GetProperty("type").GetString()!,
                 Required: f.GetProperty("required").GetBoolean(),
+                Integer: f.TryGetProperty("integer", out var i) && i.GetBoolean(),
                 Options: f.TryGetProperty("options", out var o) ? o.EnumerateArray().Select(x => x.GetString()!).ToArray() : null)).ToArray();
-            var actual = MonitoringFieldDefinitions.For(id).Select(f => (f.Key, f.Type, f.Required, Options: f.Options?.ToArray())).ToArray();
-            Assert.Equal(expected.Select(e => (e.Key, e.Type, e.Required)), actual.Select(a => (a.Key, a.Type, a.Required)));
+            var actual = MonitoringFieldDefinitions.For(id).Select(f => (f.Key, f.Type, f.Required, f.Integer, Options: f.Options?.ToArray())).ToArray();
+            Assert.Equal(expected.Select(e => (e.Key, e.Type, e.Required, e.Integer)), actual.Select(a => (a.Key, a.Type, a.Required, a.Integer)));
             Assert.Equal(expected.Select(e => e.Options), actual.Select(a => a.Options));
         }
     }

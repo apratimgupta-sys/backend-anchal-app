@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract. serviceNames is the Hindi service master: the frontend asserts services.json against it, the backend asserts the names MonitoringProvisioner seeds. Renaming a service means editing this file, services.json and ServiceNames together. fieldVisitFields is the per-service visit form structure (key, type, required, option values, in order) for the eight field-work services: the frontend asserts src/shared/field-visit-fields.json against it, the backend asserts MonitoringFieldDefinitions. Labels and Hindi are frontend-only and not in this file. Changing a field means editing this file, field-visit-fields.json and MonitoringFieldDefinitions together.",
+  "_comment": "Golden table for the shape twin. Identical copy in each repo: work/tests/domain/shape-twin.fixture.json and backend/tests/Anchal.Tests/CommissionerMonitoring/Domain/shape-twin.fixture.json. Each side asserts its own shape tables against this file, so the two cannot diverge without a test going red. Field ORDER is part of the contract. serviceNames is the Hindi service master: the frontend asserts services.json against it, the backend asserts the names MonitoringProvisioner seeds. Renaming a service means editing this file, services.json and ServiceNames together. fieldVisitFields is the per-service visit form structure (key, type, required, option values, in order) for the eight field-work services: the frontend asserts src/shared/field-visit-fields.json against it, the backend asserts MonitoringFieldDefinitions. An integer:true field takes a whole number only (the three counts: dogsPicked, dogsNeutered, treeCount); the form's input and the server's validation both follow it. Labels and Hindi are frontend-only and not in this file. Changing a field means editing this file, field-visit-fields.json and MonitoringFieldDefinitions together.",
   "shapes": {
     "1": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
     "3": { "shape": "counterRevenue", "collected": ["received", "completed", "amountPaise"], "movesPendingBalance": true },
@@ -52,8 +52,8 @@
     ],
     "10": [
       {"key": "teamLabour", "type": "text", "required": false},
-      {"key": "dogsPicked", "type": "number", "required": false},
-      {"key": "dogsNeutered", "type": "number", "required": false},
+      {"key": "dogsPicked", "type": "number", "required": false, "integer": true},
+      {"key": "dogsNeutered", "type": "number", "required": false, "integer": true},
       {"key": "actionLocation", "type": "text", "required": false}
     ],
     "13": [
@@ -75,7 +75,7 @@
       {"key": "vehicle", "type": "text", "required": false},
       {"key": "team", "type": "text", "required": false},
       {"key": "street", "type": "text", "required": false},
-      {"key": "treeCount", "type": "number", "required": false}
+      {"key": "treeCount", "type": "number", "required": false, "integer": true}
     ],
     "17": [
       {"key": "team", "type": "text", "required": false}

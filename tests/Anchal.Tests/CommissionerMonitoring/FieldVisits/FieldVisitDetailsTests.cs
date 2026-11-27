@@ -166,6 +166,38 @@ public sealed class FieldVisitDetailsTests
     }
 
     [Theory]
+    [InlineData(10, "dogsPicked", "2.5")]
+    [InlineData(10, "dogsNeutered", "\"0.5\"")]
+    [InlineData(16, "treeCount", "3.2")]
+    public async Task ACountThatIsNotAWholeNumberIsRefusedOnItsOwnField(int serviceId, string key, string literal)
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+
+        using var response = await PostRaw(host, serviceId, $@"{{""{key}"":{literal}}}");
+
+        var errors = await Rejected(response);
+        Assert.Equal("Enter a whole number from 0 to 1,000,000,000", errors.GetProperty("input.details." + key).GetString());
+    }
+
+    [Theory]
+    [InlineData(10, "dogsPicked", "7", 7)]
+    [InlineData(10, "dogsNeutered", "\"4\"", 4)]
+    [InlineData(16, "treeCount", "0", 0)]
+    [InlineData(16, "treeCount", "3.0", 3)]
+    public async Task ACountTakesAWholeNumber(int serviceId, string key, string literal, long expected)
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+
+        using var response = await PostRaw(host, serviceId, $@"{{""{key}"":{literal}}}");
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var stored = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("details");
+        Assert.Equal(expected, stored.GetProperty(key).GetInt64());
+    }
+
+    [Theory]
     [InlineData("0", 0.0)]
     [InlineData("1000000000", 1000000000.0)]
     [InlineData("\"12.5\"", 12.5)]

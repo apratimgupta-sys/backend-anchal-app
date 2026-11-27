@@ -219,6 +219,8 @@ public sealed class MonitoringFieldVisitService(
 
             var problem = field.Type switch
             {
+                "number" when field.Integer => TryNumber(value, out var count) && IsWhole(count)
+                    ? Accept(accepted, key, count) : "Enter a whole number from 0 to 1,000,000,000",
                 "number" => TryNumber(value, out var number) ? Accept(accepted, key, number) : "Enter a number from 0 to 1,000,000,000",
                 "select" => value.ValueKind == JsonValueKind.String && field.Options!.Contains(value.GetString()!)
                     ? Accept(accepted, key, value.GetString()!) : "Select one of the listed options",
@@ -256,6 +258,8 @@ public sealed class MonitoringFieldVisitService(
         accepted[key] = value;
         return null;
     }
+
+    private static bool IsWhole(object number) => number is long || (number is double d && d == Math.Floor(d));
 
     private static bool TryNumber(JsonElement value, out object number)
     {
