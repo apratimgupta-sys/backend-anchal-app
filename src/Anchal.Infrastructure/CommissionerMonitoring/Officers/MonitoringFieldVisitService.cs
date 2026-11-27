@@ -20,6 +20,14 @@ public sealed class MonitoringFieldVisitService(
     public const int IssueActionMinimumLength = 20;
     // Matches the IssueAction column width in CommissionerMonitoringDbContext.
     public const int IssueActionMaximumLength = 4000;
+    // A single-line detail (street, team, vehicle) and a multi-line one. Text fields are short by nature;
+    // the description field already carries the long form.
+    public const int DetailsTextMaximumLength = 200;
+    public const int DetailsTextAreaMaximumLength = 2000;
+    // The stored details object is {"v":1, ...}. Written at this version; read at any.
+    public const int DetailsVersion = 1;
+    // The same ceiling MonitoringRules.ValidateEntry puts on every entry figure.
+    public const long DetailsNumberMaximum = 1_000_000_000;
     public const int PageSize = 50;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -47,6 +55,7 @@ public sealed class MonitoringFieldVisitService(
             }
 
             Validate(input, today, now);
+            var detailsJson = ValidateDetails(input);
             var office = await db.Offices.SingleOrDefaultAsync(
                 x => x.Code == "anchal" + input.OfficeId.ToString(CultureInfo.InvariantCulture) && x.IsActive, ct)
                 ?? throw Validation("officeId", "Select an active Anchal");
@@ -67,7 +76,8 @@ public sealed class MonitoringFieldVisitService(
                 AccuracyMetres = input.Gps.AccuracyMetres,
                 GpsCapturedAt = input.Gps.CapturedAt,
                 ReceivedAt = now,
-                IssueAction = input.IssueAction.Trim()
+                IssueAction = input.IssueAction.Trim(),
+                DetailsJson = detailsJson
             };
             db.FieldVisits.Add(visit);
             try
@@ -177,6 +187,141 @@ public sealed class MonitoringFieldVisitService(
             throw Validation("gps", "Capture the location at the site");
     }
 
+    private static readonly JsonWriterOptions DetailsWriter = new()
+    {
+        // Keep Devanagari readable in the column rather than \uXXXX-escaped.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    /// Checks the submitted details against the service's definition and returns the text to store,
+    /// {"v":1, ...} in the definition's own order, or null when nothing was filled in. Every problem
+    /// is reported at once, keyed "input.details.<key>", so the form can mark each field. A blank
+    /// value (null, or text that is only whitespace) is the same as leaving the field out.
+    private static string? ValidateDetails(FieldVisitInputDto input)
+    {
+        var details = input.Details;
+        if (details is null || details.Count == 0) return null;
+
+        var fields = MonitoringFieldDefinitions.For(input.ServiceId);
+        var errors = new Dictionary<string, string>();
+        var accepted = new Dictionary<string, object>();
+        foreach (var (key, value) in details)
+        {
+            var field = fields.FirstOrDefault(x => x.Key == key);
+            if (field is null)
+            {
+                errors["input.details." + key] = "This activity does not ask for this detail";
+                continue;
+            }
+            if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ||
+                (value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())))
+                continue;
+
+            var problem = field.Type switch
+            {
+                "number" => TryNumber(value, out var number) ? Accept(accepted, key, number) : "Enter a number from 0 to 1,000,000,000",
+                "select" => value.ValueKind == JsonValueKind.String && field.Options!.Contains(value.GetString()!)
+                    ? Accept(accepted, key, value.GetString()!) : "Select one of the listed options",
+                _ => TryText(value, field.Type == "textarea" ? DetailsTextAreaMaximumLength : DetailsTextMaximumLength, out var text, out var error)
+                    ? Accept(accepted, key, text) : error
+            };
+            if (problem is not null) errors["input.details." + key] = problem;
+        }
+        if (errors.Count > 0)
+            throw new MonitoringRuleException(422, new("VALIDATION", "Please correct the highlighted fields", errors));
+        if (accepted.Count == 0) return null;
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, DetailsWriter))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("v", DetailsVersion);
+            foreach (var field in fields)
+            {
+                if (!accepted.TryGetValue(field.Key, out var value)) continue;
+                switch (value)
+                {
+                    case long whole: writer.WriteNumber(field.Key, whole); break;
+                    case double fraction: writer.WriteNumber(field.Key, fraction); break;
+                    default: writer.WriteString(field.Key, (string)value); break;
+                }
+            }
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string? Accept(Dictionary<string, object> accepted, string key, object value)
+    {
+        accepted[key] = value;
+        return null;
+    }
+
+    private static bool TryNumber(JsonElement value, out object number)
+    {
+        number = 0L;
+        double parsed;
+        if (value.ValueKind == JsonValueKind.Number) { if (!value.TryGetDouble(out parsed)) return false; }
+        else if (value.ValueKind != JsonValueKind.String ||
+                 !double.TryParse(value.GetString()!.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) return false;
+        if (!double.IsFinite(parsed) || parsed < 0 || parsed > DetailsNumberMaximum) return false;
+        number = parsed == Math.Floor(parsed) ? (long)parsed : parsed;
+        return true;
+    }
+
+    private static bool TryText(JsonElement value, int maximum, out string text, out string error)
+    {
+        text = string.Empty;
+        error = "Enter text";
+        if (value.ValueKind != JsonValueKind.String) return false;
+        text = value.GetString()!.Trim();
+        if (text.Length <= maximum) return true;
+        error = $"Shorten this to {maximum} characters or fewer";
+        return false;
+    }
+
+    // Keys the HTTP adapter rewrites wherever it finds them in a payload (officeId, officeCode, input);
+    // a stored details key of that name would be rewritten, or fail the whole list, so it is not read.
+    private static readonly HashSet<string> ReservedDetailKeys = new(StringComparer.Ordinal) { "officeId", "officeCode", "input" };
+
+    /// Reads the stored details for display, whatever they hold. This never throws: a row of a version
+    /// this code has never heard of, malformed text, a non-object, or a value of an unexpected type each
+    /// give back whatever scalars (text and numbers) can be read, and the rest is ignored. It returns null
+    /// when there is nothing to show, which is also what every row filed before the column existed holds.
+    /// The version is deliberately not consulted: the daily entry's snapshot reader throws on an unknown
+    /// SchemaVersion and one such row takes the screen down; showing less is the better failure.
+    public static IReadOnlyDictionary<string, object>? ReadDetails(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var read = new Dictionary<string, object>();
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Name == "v" || ReservedDetailKeys.Contains(property.Name)) continue;
+                switch (property.Value.ValueKind)
+                {
+                    case JsonValueKind.String:
+                        read[property.Name] = property.Value.GetString()!;
+                        break;
+                    case JsonValueKind.Number when property.Value.TryGetInt64(out var whole):
+                        read[property.Name] = whole;
+                        break;
+                    case JsonValueKind.Number when property.Value.TryGetDouble(out var fraction) && double.IsFinite(fraction):
+                        read[property.Name] = fraction;
+                        break;
+                }
+            }
+            return read.Count == 0 ? null : read;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     private async Task<FieldVisitDto> Dto(MonitoringFieldVisit visit, CancellationToken ct)
     {
         var officer = visit.OfficerUser ?? await db.Users.SingleAsync(x => x.Id == visit.OfficerUserId, ct);
@@ -184,7 +329,7 @@ public sealed class MonitoringFieldVisitService(
             visit.OfficeId, visit.Ward, visit.ServiceId,
             new GpsReadingDto(visit.Latitude, visit.Longitude, visit.AccuracyMetres, visit.GpsCapturedAt),
             visit.IssueAction, visit.OfficerUserId, officer.DisplayName, officer.Designation ?? string.Empty,
-            visit.ReceivedAt, visit.VoidedAt, visit.VoidReason);
+            visit.ReceivedAt, visit.VoidedAt, visit.VoidReason) { Details = ReadDetails(visit.DetailsJson) };
     }
 
     private async Task<SessionDto> Session(ClaimsPrincipal principal, CancellationToken ct, string? requiredRole = null)

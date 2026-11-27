@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Anchal.Domain.CommissionerMonitoring.Rules;
 
 namespace Anchal.Application.CommissionerMonitoring.DTOs;
@@ -44,14 +46,24 @@ public sealed record AuditDto(Guid Id, Guid OfficeId, string Actor, DateTimeOffs
 
 public sealed record GpsReadingDto(double Latitude, double Longitude, double AccuracyMetres, DateTimeOffset CapturedAt);
 public sealed record FieldVisitInputDto(DateOnly VisitDate, string VisitTime, int OfficeId, int Ward, int ServiceId,
-    GpsReadingDto Gps, string IssueAction);
+    GpsReadingDto Gps, string IssueAction)
+{
+    // The service's own fields, raw as submitted and validated by the visit service. Left out of the
+    // request fingerprint while absent, so a request hashed before this member existed still replays.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, JsonElement>? Details { get; init; }
+}
 public sealed record SaveFieldVisitCommand(string RequestId, FieldVisitInputDto Input);
 // OfficeId stays a Guid here so the HTTP adapter rewrites it to the Anchal number, as it
 // does everywhere else; VisitTime is HH:mm, the form's own shape.
 public sealed record FieldVisitDto(Guid Id, DateOnly VisitDate, string VisitTime, Guid OfficeId, int Ward,
     int ServiceId, GpsReadingDto Gps, string IssueAction, Guid OfficerId, string OfficerName,
     string OfficerDesignation, DateTimeOffset ReceivedAt,
-    DateTimeOffset? VoidedAt, string? VoidReason);
+    DateTimeOffset? VoidedAt, string? VoidReason)
+{
+    // Scalars only (string or number), as read defensively from the stored JSON; null when there are none.
+    public IReadOnlyDictionary<string, object>? Details { get; init; }
+}
 public sealed record FieldVisitPageDto(IReadOnlyList<FieldVisitDto> Rows, int Total);
 public sealed record FieldVisitFilter(DateOnly From, DateOnly To, int? OfficeId, int? Ward, int? ServiceId,
     Guid? OfficerId, int Page);

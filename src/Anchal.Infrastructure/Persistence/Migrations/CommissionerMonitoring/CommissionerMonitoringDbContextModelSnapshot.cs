@@ -156,6 +156,9 @@ namespace Anchal.Infrastructure.Persistence.Migrations.CommissionerMonitoring
                     b.Property<double>("AccuracyMetres")
                         .HasColumnType("double precision");
 
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Fingerprint")
                         .IsRequired()
                         .HasMaxLength(64)

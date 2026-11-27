@@ -52,6 +52,8 @@ public sealed partial class CommissionerMonitoringDbContext(DbContextOptions<Com
             entity.Property(x => x.RequestId).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Fingerprint).HasMaxLength(64).IsRequired();
             entity.HasIndex(x => new { x.OfficerUserId, x.RequestId }).IsUnique();
+            // {"v":1, ...}: the service's own fields, nullable, unbounded text (bounded by validation, not the column).
+            entity.Property(x => x.DetailsJson);
             entity.Property(x => x.VoidReason).HasMaxLength(1000);
             entity.Property(x => x.PhotoOneKey).HasMaxLength(512);
             entity.Property(x => x.PhotoTwoKey).HasMaxLength(512);
