@@ -19,9 +19,9 @@ public sealed class MonitoringProvisioner(CommissionerMonitoringDbContext db, Mo
     // shape-twin.fixture.json, so a rename must be made in all three; the fixture is committed in both repos.
     private static readonly string[] ServiceNames =
     [
-        "नए होल्डिंग आवेदन की रिपोर्टिंग (SAF)", "Holding Tax का भुगतान",
+        "नए होल्डिंग आवेदन की रिपोर्टिंग (SAF)", "होल्डिंग टैक्स भुगतान की रिपोर्टिंग",
         "नगर निगम व्यापार लाइसेंस आवेदन की रिपोर्टिंग", "नए जल संयोजन आवेदन की रिपोर्टिंग",
-        "Water User Charge का भुगतान", "Waste User Charge का भुगतान",
+        "जल उपयोगकर्ता शुल्क भुगतान की रिपोर्टिंग", "कचरा उपयोगकर्ता शुल्क भुगतान की रिपोर्टिंग",
         "डेटा सुधार आवेदन की रिपोर्टिंग", "घर पर कचरा वाहन की सेवा से संबंधित",
         "Fogging से संबंधित", "Street Dog से संबंधित", "जन्म एवं मृत्यु निबंधन की रिपोर्टिंग",
         "जन शिकायत आवेदन की रिपोर्टिंग", "पथ बत्ती", "सड़क एवं नाली निर्माण से संबंधित",
