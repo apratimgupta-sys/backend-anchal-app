@@ -55,7 +55,7 @@ public sealed class FieldWorkEntryRulesTests
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(25)]
+    [InlineData(24)]
     public void ACounterEntryWithNoAverageDaysIsAccepted(int serviceId)
     {
         var entry = new EntryInput(serviceId, Today, "Ward 24", 5, 3, 0, 0, 0, 0, 0, 0, null, "");

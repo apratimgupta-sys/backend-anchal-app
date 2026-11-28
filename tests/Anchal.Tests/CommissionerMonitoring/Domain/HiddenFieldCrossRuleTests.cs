@@ -98,7 +98,7 @@ public sealed class HiddenFieldCrossRuleTests
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(25)]
+    [InlineData(24)]
     public void ACounterServiceStillCannotDisposeMoreThanItReceived(int serviceId)
     {
         var entry = PreCutover(serviceId) with { Received = 2, Completed = 5 };

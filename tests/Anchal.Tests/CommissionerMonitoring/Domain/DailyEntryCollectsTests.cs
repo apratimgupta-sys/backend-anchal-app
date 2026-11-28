@@ -3,8 +3,9 @@ using Xunit;
 
 namespace Anchal.Tests.CommissionerMonitoring.Domain;
 
-/// Field work leaves the daily entry. The rule is derived from the form shape, never listed:
-/// "the daily entry collects every service that is not field work".
+/// Field work leaves the daily entry. Field work is derived from the form shape, never listed; the services
+/// withdrawn by decision are listed in MonitoringRules (see DailyEntryWithdrawnTests). The daily entry collects
+/// every service that is neither.
 public sealed class DailyEntryCollectsTests
 {
     private static readonly DateOnly Today = new(2026, 11, 20);
@@ -13,7 +14,7 @@ public sealed class DailyEntryCollectsTests
         new(serviceId, Today, "Ward 24", 0, 0, 0, 0, 0, 0, 0, 0, null, "");
 
     public static TheoryData<int> FieldWork => new(8, 9, 10, 13, 14, 15, 16, 17);
-    public static TheoryData<int> Collected => new(1, 2, 3, 4, 5, 6, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
+    public static TheoryData<int> Collected => new(1, 2, 3, 4, 5, 6, 7, 11, 12, 24);
 
     [Theory]
     [MemberData(nameof(FieldWork))]
@@ -45,19 +46,19 @@ public sealed class DailyEntryCollectsTests
     }
 
     [Fact]
-    public void TheDailyEntryCollectsExactlyTheServicesThatAreNotFieldWork()
+    public void TheDailyEntryCollectsNoFieldWorkAndNoWithdrawnService()
     {
         var collected = Enumerable.Range(1, MonitoringRules.ServiceCount)
             .Where(MonitoringRules.DailyEntryCollects).ToArray();
 
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25 }, collected);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 11, 12, 24 }, collected);
         Assert.All(collected, id => Assert.NotEqual(MonitoringFormShape.FieldWork, MonitoringRules.FormShape(id)));
     }
 
     [Fact]
-    public void TheCountIsSeventeenAndIsTheCountOfThePredicate()
+    public void TheCountIsTenAndIsTheCountOfThePredicate()
     {
-        Assert.Equal(17, MonitoringRules.DailyEntryServiceCount);
+        Assert.Equal(10, MonitoringRules.DailyEntryServiceCount);
         Assert.Equal(Enumerable.Range(1, MonitoringRules.ServiceCount).Count(MonitoringRules.DailyEntryCollects),
             MonitoringRules.DailyEntryServiceCount);
     }

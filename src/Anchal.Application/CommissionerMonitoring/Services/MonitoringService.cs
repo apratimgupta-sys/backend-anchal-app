@@ -239,7 +239,11 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             // counter and counter-and-money): revenue has payments rather than cases closed, and field work has work
             // done rather than a queue. Summing them in would push the disposal ratio past 100% (field work completes
             // against a received of 0). Work done is the other side: services that collect `completed` and no `received`.
-            var counter = period.Where(x => MonitoringRules.MovesPendingBalance(x.Input.ServiceId)).ToArray();
+            // Unpinned, a figure covers only what the daily entry collects: a withdrawn service's old entries and
+            // opening balance would otherwise sit in the totals forever, with nobody able to file against them.
+            // Pinned to one service, that service's own history is shown whatever it is.
+            bool Counts(int serviceId) => filter.ServiceId.HasValue || MonitoringRules.DailyEntryCollects(serviceId);
+            var counter = period.Where(x => MonitoringRules.MovesPendingBalance(x.Input.ServiceId) && Counts(x.Input.ServiceId)).ToArray();
             var received = counter.Sum(x => x.Input.Received);
             var completed = counter.Sum(x => x.Input.Completed);
             var workDone = period.Where(x => MonitoringRules.Collects(x.Input.ServiceId, "completed")
@@ -252,7 +256,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 var closing = filter.To < setup.StartDate ? new Balances(0, 0, 0)
                     : entries.Where(x => x.Input.ServiceId == balance.ServiceId && x.Input.ServiceDate <= filter.To)
                         .OrderBy(x => x.Input.ServiceDate).LastOrDefault()?.Closing ?? balance.Opening;
-                if (MonitoringRules.MovesPendingBalance(balance.ServiceId)) pending += closing.Service;
+                if (MonitoringRules.MovesPendingBalance(balance.ServiceId) && Counts(balance.ServiceId)) pending += closing.Service;
                 complaints += closing.Complaints; field += closing.Field;
             }
             double? disposalPct = received == 0 ? null : (double)completed / received * 100;
@@ -263,7 +267,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             if (pending > 10) reasons.Add("Pending > 10");
             if (disposalPct < 90) reasons.Add("Disposal < 90%");
             rows.Add(new(office.Id, office.Code, received, completed, sla, pending, disposalPct, slaPct,
-                period.Sum(x => x.Input.AmountPaise), complaints, field, period.Count(x => filter.ServiceId.HasValue || DailyEntryCollects(x.Input.ServiceId)), expected, true, reasons, workDone));
+                period.Where(x => Counts(x.Input.ServiceId)).Sum(x => x.Input.AmountPaise), complaints, field, period.Count(x => Counts(x.Input.ServiceId)), expected, true, reasons, workDone));
         }
         return Read(new DashboardDto(rows), LastUpdated(audits));
     });

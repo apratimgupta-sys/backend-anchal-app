@@ -63,11 +63,22 @@ public static class MonitoringRules
     // The services in the Service Master, numbered 1 to ServiceCount.
     public const int ServiceCount = 25;
 
+    // Services taken off the clerk's daily entry by decision, not by shape. A hidden one may return: delete its
+    // id here, in the frontend's src/shared/daily-entry-withdrawn.json and in the golden fixture, together. The
+    // removed one will not. They stay in the Service Master (ids 1 to ServiceCount remain valid everywhere) and
+    // keep their counter shape, so entries already filed against them stay readable.
+    // TWIN: src/shared/daily-entry-withdrawn.json in the frontend repo. Both sides are asserted against
+    // "dailyEntryWithdrawn" in shape-twin.fixture.json.
+    public static readonly IReadOnlySet<int> HiddenFromDailyEntry = new HashSet<int> { 18, 19, 20, 21, 22, 23 };
+    public static readonly IReadOnlySet<int> RemovedFromDailyEntry = new HashSet<int> { 25 };
+
     // Whether the daily entry collects this service. Field work is reported by field officers as visits, so
-    // the clerk's daily entry refuses it. Derived from the form shape, never listed: the eight field-work
-    // services keep their shape (visits reference them and historical entries need it to stay readable), and
-    // the daily entry collects whatever is not that shape.
-    public static bool DailyEntryCollects(int serviceId) => !IsFieldWork(serviceId);
+    // the clerk's daily entry refuses it. Field work is derived from the form shape, never listed: the eight
+    // field-work services keep their shape (visits reference them and historical entries need it to stay
+    // readable). The withdrawn services have no shape to derive from, so they are the two sets above. The daily
+    // entry collects whatever is neither field work nor withdrawn.
+    public static bool DailyEntryCollects(int serviceId) =>
+        !IsFieldWork(serviceId) && !HiddenFromDailyEntry.Contains(serviceId) && !RemovedFromDailyEntry.Contains(serviceId);
 
     // How many services the daily entry collects: the expected-reports denominator, per day.
     public static int DailyEntryServiceCount => Enumerable.Range(1, ServiceCount).Count(DailyEntryCollects);
@@ -106,7 +117,7 @@ public static class MonitoringRules
     public static bool IsCanonicalWard(string? ward) => ward is not null && ward.StartsWith("Ward ", StringComparison.Ordinal)
         && ward.Length is 6 or 7 && ward[5] is >= '1' and <= '9' && ward[5..].All(c => c is >= '0' and <= '9')
         && int.Parse(ward[5..]) <= WardCount;
-    public static void ValidateEntry(EntryInput input, DateOnly today) { var errors = new Dictionary<string, string>(); var figures = new (string, long)[] { ("received", input.Received), ("completed", input.Completed), ("slaWithinTime", input.SlaWithinTime), ("amountPaise", input.AmountPaise), ("complaintsReceived", input.ComplaintsReceived), ("complaintsResolved", input.ComplaintsResolved), ("fieldReceived", input.FieldReceived), ("fieldCompleted", input.FieldCompleted) }; foreach (var (name, value) in figures) if (value is < 0 or > 1_000_000_000) errors[name] = "Enter a nonnegative whole number within the allowed limit"; if (input.ServiceId is < 1 or > ServiceCount) errors["serviceId"] = "Select a service"; else if (!DailyEntryCollects(input.ServiceId)) errors["serviceId"] = "Field work is reported by field officers, not on the daily entry"; if (input.ServiceDate == default || input.ServiceDate > today) errors["serviceDate"] = "Enter a valid date through today"; if (!IsCanonicalWard(input.Ward?.Trim())) errors["ward"] = "Select a ward from 1 to 53"; if (input.Remarks is null || input.Remarks.Length > 2000) errors["remarks"] = "Remarks must be at most 2000 characters"; if (Collects(input.ServiceId, "slaWithinTime", "completed") && input.SlaWithinTime > input.Completed) errors["slaWithinTime"] = "Cannot exceed completed cases"; if (Collects(input.ServiceId, "completed", "received") && input.Completed > input.Received) errors["completed"] = "Completed cannot exceed received"; if (Collects(input.ServiceId, "complaintsResolved", "complaintsReceived") && input.ComplaintsResolved > input.ComplaintsReceived) errors["complaintsResolved"] = "Resolved complaints cannot exceed received"; if (Collects(input.ServiceId, "fieldCompleted", "fieldReceived") && input.FieldCompleted > input.FieldReceived) errors["fieldCompleted"] = "Completed field tasks cannot exceed received"; if (input.AvgDisposalDays is double days && (!double.IsFinite(days) || days < 0 || days > 100000)) errors["avgDisposalDays"] = "Enter valid average days";
+    public static void ValidateEntry(EntryInput input, DateOnly today) { var errors = new Dictionary<string, string>(); var figures = new (string, long)[] { ("received", input.Received), ("completed", input.Completed), ("slaWithinTime", input.SlaWithinTime), ("amountPaise", input.AmountPaise), ("complaintsReceived", input.ComplaintsReceived), ("complaintsResolved", input.ComplaintsResolved), ("fieldReceived", input.FieldReceived), ("fieldCompleted", input.FieldCompleted) }; foreach (var (name, value) in figures) if (value is < 0 or > 1_000_000_000) errors[name] = "Enter a nonnegative whole number within the allowed limit"; if (input.ServiceId is < 1 or > ServiceCount) errors["serviceId"] = "Select a service"; else if (IsFieldWork(input.ServiceId)) errors["serviceId"] = "Field work is reported by field officers, not on the daily entry"; else if (!DailyEntryCollects(input.ServiceId)) errors["serviceId"] = "This service is not reported on the daily entry"; if (input.ServiceDate == default || input.ServiceDate > today) errors["serviceDate"] = "Enter a valid date through today"; if (!IsCanonicalWard(input.Ward?.Trim())) errors["ward"] = "Select a ward from 1 to 53"; if (input.Remarks is null || input.Remarks.Length > 2000) errors["remarks"] = "Remarks must be at most 2000 characters"; if (Collects(input.ServiceId, "slaWithinTime", "completed") && input.SlaWithinTime > input.Completed) errors["slaWithinTime"] = "Cannot exceed completed cases"; if (Collects(input.ServiceId, "completed", "received") && input.Completed > input.Received) errors["completed"] = "Completed cannot exceed received"; if (Collects(input.ServiceId, "complaintsResolved", "complaintsReceived") && input.ComplaintsResolved > input.ComplaintsReceived) errors["complaintsResolved"] = "Resolved complaints cannot exceed received"; if (Collects(input.ServiceId, "fieldCompleted", "fieldReceived") && input.FieldCompleted > input.FieldReceived) errors["fieldCompleted"] = "Completed field tasks cannot exceed received"; if (input.AvgDisposalDays is double days && (!double.IsFinite(days) || days < 0 || days > 100000)) errors["avgDisposalDays"] = "Enter valid average days";
             // "Nothing to report" contradicts only the figures the form asks this service for. A retired figure
             // keeps its stored value through a correction, so it cannot be held against the flag: the message
             // would name a field with nothing to highlight. (Not EntryInput.IsZeroActivity, which is shape-blind

@@ -39,7 +39,7 @@ public sealed class DailyEntryFieldWorkTests
     }
 
     [Theory]
-    [InlineData(1)] [InlineData(2)] [InlineData(11)] [InlineData(20)]
+    [InlineData(1)] [InlineData(2)] [InlineData(11)] [InlineData(24)]
     public async Task ACollectedServiceIsStillAccepted(int service)
     {
         await using var f = await Fixture.Create();
@@ -114,17 +114,53 @@ public sealed class DailyEntryFieldWorkTests
         Assert.True(pinned.IsSuccess, pinned.Error?.Message);
     }
 
+    /// A hidden service still has an opening balance and may have old entries. Nobody can file against it any
+    /// more, so if they stayed in the unpinned figures they would sit in "Total pending" forever.
+    [Fact]
+    public async Task AWithdrawnServicesHistoryAndOpeningBalanceStayOutOfTheUnpinnedFigures()
+    {
+        await using var f = await Fixture.Create(opening: id => id == 20 ? 40 : 0);
+        f.SeedPreCutover(Input(20, Day1, received: 6, completed: 1));
+        await f.Db.SaveChangesAsync();
+        Assert.True((await f.Save(Input(11, Day1, received: 5, completed: 2))).IsSuccess);
+
+        var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day1))).Value!.Data.Rows.Single();
+
+        Assert.Equal(5, row.Received);
+        Assert.Equal(2, row.Completed);
+        Assert.Equal(3, row.Pending);
+        Assert.Equal(1, row.Submitted);
+        Assert.Equal(10, row.Expected);
+    }
+
+    /// Pinned to the hidden service, its own history is still shown and nothing is due for it.
+    [Fact]
+    public async Task PinnedToAWithdrawnServiceItsOwnHistoryShowsAndNothingIsDue()
+    {
+        await using var f = await Fixture.Create(opening: id => id == 20 ? 40 : 0);
+        f.SeedPreCutover(Input(20, Day1, received: 6, completed: 1));
+        await f.Db.SaveChangesAsync();
+
+        var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day1, null, 20))).Value!.Data.Rows.Single();
+
+        Assert.Equal(6, row.Received);
+        Assert.Equal(1, row.Completed);
+        Assert.Equal(45, row.Pending);
+        Assert.Equal(1, row.Submitted);
+        Assert.Equal(0, row.Expected);
+    }
+
     // ---- the denominator ----
 
     [Fact]
-    public async Task UnpinnedExpectedIsSeventeenReportsPerDayAndPinnedIsOne()
+    public async Task UnpinnedExpectedIsTenReportsPerDayAndPinnedIsOne()
     {
         await using var f = await Fixture.Create();
 
         var all = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day3))).Value!.Data.Rows.Single();
         var pinned = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day3, null, 1))).Value!.Data.Rows.Single();
 
-        Assert.Equal(3 * 17, all.Expected);
+        Assert.Equal(3 * 10, all.Expected);
         Assert.Equal(3, pinned.Expected);
     }
 
@@ -239,7 +275,7 @@ public sealed class DailyEntryFieldWorkTests
 
         public Guid SeedPreCutover(EntryInput input) => PreCutoverEntries.Add(Db, office, user, input, new Clock().GetUtcNow());
 
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(Func<int, long>? opening = null)
         {
             var f = new Fixture();
             f.Db.Offices.Add(new MonitoringOffice { Id = f.office, Code = "anchal1", Name = "Anchal 1" });
@@ -250,7 +286,7 @@ public sealed class DailyEntryFieldWorkTests
                 Id = Guid.NewGuid(), Key = x.ToString(), Name = $"Service {x}", Kind = MonitoringActivityKind.Service, SortOrder = x }));
             await f.Db.SaveChangesAsync();
             var setup = await f.Service.SaveSetupAsync(f.Office, new("setup-request", null, Day1,
-                Enumerable.Range(1, 25).Select(x => new OpeningBalanceDto(x, new(0, 0, 0))).ToArray()));
+                Enumerable.Range(1, 25).Select(x => new OpeningBalanceDto(x, new(opening?.Invoke(x) ?? 0, 0, 0))).ToArray()));
             Assert.True(setup.IsSuccess, setup.Error?.Message);
             return f;
         }
