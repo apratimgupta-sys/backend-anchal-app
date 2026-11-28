@@ -247,6 +247,25 @@ public sealed class DailyEntryFieldWorkTests
         Assert.Equal(0, row.Expected);
     }
 
+    /// A pre-cutover field-work entry's amount is left out of the period total on purpose: the dashboard's
+    /// amount spans the services that collect one, and field work is not among them. Pinned to the service the
+    /// entry's own figure is still shown, so it is excluded from the totals but not lost.
+    [Fact]
+    public async Task APreCutoverFieldWorkAmountIsLeftOutOfTheTotalButStillShownWhenPinned()
+    {
+        await using var f = await Fixture.Create();
+        f.SeedPreCutover(Input(9, Day1, completed: 7) with { AmountPaise = 70000 });
+        var saved = await f.Save(Input(2, Day1, received: 3) with { AmountPaise = 30000 });
+        Assert.True(saved.IsSuccess, saved.Error?.Message);
+        await f.Db.SaveChangesAsync();
+
+        var unpinned = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day1))).Value!.Data.Rows.Single();
+        var pinned = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day1, null, 9))).Value!.Data.Rows.Single();
+
+        Assert.Equal(30000, unpinned.AmountPaise);
+        Assert.Equal(70000, pinned.AmountPaise);
+    }
+
     [Fact]
     public async Task PinnedToAFieldWorkServiceWithNoHistoryNothingIsDueEither()
     {

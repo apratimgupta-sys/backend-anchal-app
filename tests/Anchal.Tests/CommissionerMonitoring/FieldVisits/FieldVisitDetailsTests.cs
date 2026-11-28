@@ -98,6 +98,19 @@ public sealed class FieldVisitDetailsTests
     }
 
     [Fact]
+    public async Task AnExplicitlyEmptyDetailsObjectIsAcceptedAndStoresNothing()
+    {
+        await using var host = await Create();
+        await host.SignInAsOfficer();
+
+        using var response = await Post(host, Input(9, new Dictionary<string, object>()));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var visit = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Null(await StoredDetails(host, visit.GetProperty("id").GetGuid()));
+    }
+
+    [Fact]
     public async Task AnEmptyOrAllBlankDetailsObjectIsTheSameAsNone()
     {
         await using var host = await Create();
