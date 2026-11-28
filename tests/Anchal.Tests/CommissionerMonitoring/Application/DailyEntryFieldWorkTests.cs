@@ -150,6 +150,34 @@ public sealed class DailyEntryFieldWorkTests
         Assert.Equal(0, row.Expected);
     }
 
+    /// An office that files every service the daily entry collects reads as fully filed. The ten come from the
+    /// rule, and each input respects its service's shape: revenue takes received and an amount, counter-revenue
+    /// takes received, completed and an amount, counter takes received and completed.
+    [Fact]
+    public async Task AnOfficeThatFilesEveryCollectedServiceReadsTenOfTen()
+    {
+        await using var f = await Fixture.Create();
+        var collected = Enumerable.Range(1, MonitoringRules.ServiceCount).Where(MonitoringRules.DailyEntryCollects).ToArray();
+        Assert.Equal(10, collected.Length);
+
+        foreach (var service in collected)
+        {
+            var input = MonitoringRules.FormShape(service) switch
+            {
+                MonitoringFormShape.Revenue => Input(service, Day1, received: 3) with { AmountPaise = 30000 },
+                MonitoringFormShape.CounterRevenue => Input(service, Day1, received: 5, completed: 2) with { AmountPaise = 30000 },
+                _ => Input(service, Day1, received: 5, completed: 2),
+            };
+            var saved = await f.Save(input);
+            Assert.True(saved.IsSuccess, $"service {service}");
+        }
+
+        var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day1))).Value!.Data.Rows.Single();
+
+        Assert.Equal(10, row.Submitted);
+        Assert.Equal(10, row.Expected);
+    }
+
     // ---- the denominator ----
 
     [Fact]
@@ -174,7 +202,7 @@ public sealed class DailyEntryFieldWorkTests
         Assert.Equal(3 * MonitoringRules.DailyEntryServiceCount, row.Expected);
     }
 
-    /// The denominator must come from the rule. A literal here, 25 or 17 alike, is what drifted before.
+    /// The denominator must come from the rule. A literal here, 25 or 10 alike, is what drifted before.
     /// The only literals allowed are the pinned branch's 1 and 0, and that branch must ask the rule.
     [Fact]
     public void TheDenominatorExpressionCarriesNoNumericLiteralBesideThePinnedBranch()
@@ -188,8 +216,8 @@ public sealed class DailyEntryFieldWorkTests
         Assert.Contains("DailyEntryServiceCount", unpinned);
     }
 
-    /// Submitted is compared with Expected. A pre-cutover field-work entry is in neither the 17 nor the
-    /// count, or an office could read as 20 of 17 and look fully filed.
+    /// Submitted is compared with Expected. A pre-cutover field-work entry is in neither the ten nor the
+    /// count, or an office could read as 20 of 10 and look fully filed.
     [Fact]
     public async Task APreCutoverFieldWorkEntryDoesNotInflateTheFiledCount()
     {

@@ -36,7 +36,9 @@ public sealed class FieldWorkEntryRulesTests
         Assert.Equal(new[] { "serviceId" }, error.Error.FieldErrors!.Keys);
     }
 
-    /// Was asserted for all 17 non-field-work services; the three revenue
+    /// Checks the shape rule over every counter-shaped service, whether or not the daily entry still offers it
+    /// (18-23 and 25 are withdrawn from the entry but keep the shape). Was asserted for all non-field-work
+    /// services; the three revenue
     /// services left it when the revenue shape stopped collecting a disposal
     /// figure — the rule's `completed` operand is not a question the office is
     /// asked there, so enforcing it only dead-ends a correction.
