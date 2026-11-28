@@ -75,3 +75,15 @@ public sealed record ServiceRowDto(int ServiceId, long Received, long Completed,
 public sealed record DashboardServicesDto(IReadOnlyList<ServiceRowDto> Rows);
 public sealed record DayRowDto(DateOnly Date, long Received, long Completed, long AmountPaise);
 public sealed record DashboardDaysDto(IReadOnlyList<DayRowDto> Rows);
+
+// The visit summary. OfficeId is the Anchal number (1 to 6), as the visit list's filter takes it.
+public sealed record VisitSummaryFilter(DateOnly From, DateOnly To, int? OfficeId);
+// Sum over the visits that gave this number; Visits is how many did, so the page can say how many did not.
+public sealed record VisitNumberSummaryDto(string Key, double Sum, int Visits);
+public sealed record VisitOptionSummaryDto(string Value, int Visits, IReadOnlyList<VisitNumberSummaryDto> Numbers);
+public sealed record VisitChoiceSummaryDto(string Key, IReadOnlyList<VisitOptionSummaryDto> Options);
+public sealed record VisitServiceSummaryDto(int ServiceId, int Visits, int WardsCovered,
+    IReadOnlyList<VisitNumberSummaryDto> Numbers, IReadOnlyList<VisitChoiceSummaryDto> Choices);
+public sealed record WardVisitsDto(int Ward, int Visits);
+public sealed record FieldVisitSummaryDto(int Visits, int Officers,
+    IReadOnlyList<VisitServiceSummaryDto> Services, IReadOnlyList<WardVisitsDto> Wards);

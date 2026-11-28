@@ -36,6 +36,20 @@ public sealed class MonitoringFieldVisitController(
         return await adapter.Result(await visits.ListAsync(User, filter, ct), ct);
     }
 
+    [HttpGet("summary"), Authorize(Policy = MonitoringPolicies.Commissioner)]
+    public async Task<IActionResult> Summary(CancellationToken ct)
+    {
+        VisitSummaryFilter filter;
+        try
+        {
+            var from = adapter.Date(Request.Query["from"].ToString(), "from", adapter.Today);
+            filter = new(from, adapter.Date(Request.Query["to"].ToString(), "to", from), Bounded(Request.Query, "officeId", 1, 6));
+        }
+        catch (Anchal.Domain.CommissionerMonitoring.Rules.MonitoringRuleException exception)
+        { return new ObjectResult(exception.Error) { StatusCode = exception.Status }; }
+        return await adapter.Result(await visits.SummaryAsync(User, filter, ct), ct);
+    }
+
     [HttpPost("{id}/void"), Authorize(Policy = MonitoringPolicies.Commissioner)]
     public async Task<IActionResult> Void(string id, CancellationToken ct)
     {

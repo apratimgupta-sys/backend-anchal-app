@@ -390,6 +390,7 @@ public sealed class RoleManagerUserAdministrationTests
     [InlineData("/office/setup")]
     [InlineData("/office/entries?mode=day")]
     [InlineData("/field-visits?from=2026-11-01&to=2026-11-23")]
+    [InlineData("/field-visits/summary?from=2026-11-01&to=2026-11-23")]
     public async Task ARoleManagerIsDeniedEveryDataRoute(string route)
     {
         await using var host = await MonitoringTestHost.Create();

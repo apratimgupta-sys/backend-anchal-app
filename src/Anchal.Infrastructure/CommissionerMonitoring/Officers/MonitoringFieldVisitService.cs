@@ -132,6 +132,66 @@ public sealed class MonitoringFieldVisitService(
             return new FieldVisitPageDto(mapped, total);
         });
 
+    /// The period's visits rolled up for the Commissioner's dashboard: how many, by how many officers, what
+    /// each field-work service counted, and where. Voided visits are not counted. Only field-work services
+    /// are summarised; a visit stored for any other service (none can be filed now) is left out of every figure.
+    public Task<MonitoringResult<FieldVisitSummaryDto>> SummaryAsync(ClaimsPrincipal principal, VisitSummaryFilter filter, CancellationToken ct = default) =>
+        Run(async () =>
+        {
+            await Session(principal, ct, "commissioner");
+            if (filter.From > filter.To) throw Validation("from", "Enter a valid date range");
+
+            var query = db.FieldVisits.AsNoTracking()
+                .Where(x => x.VisitDate >= filter.From && x.VisitDate <= filter.To && x.VoidedAt == null);
+            if (filter.OfficeId is { } officeNumber)
+            {
+                var code = "anchal" + officeNumber.ToString(CultureInfo.InvariantCulture);
+                query = query.Where(x => x.Office.Code == code);
+            }
+            var stored = await query.Select(x => new { x.ServiceId, x.Ward, x.OfficerUserId, x.DetailsJson }).ToListAsync(ct);
+            var rows = stored.Where(x => MonitoringRules.IsFieldWork(x.ServiceId))
+                .Select(x => new SummaryRow(x.ServiceId, x.Ward, x.OfficerUserId, ReadDetails(x.DetailsJson))).ToArray();
+
+            var services = Enumerable.Range(1, MonitoringRules.ServiceCount).Where(MonitoringRules.IsFieldWork)
+                .Select(id => Summarise(id, rows.Where(x => x.ServiceId == id).ToArray())).ToArray();
+            var wards = rows.GroupBy(x => x.Ward).OrderBy(x => x.Key).Select(x => new WardVisitsDto(x.Key, x.Count())).ToArray();
+            return new FieldVisitSummaryDto(rows.Length, rows.Select(x => x.OfficerUserId).Distinct().Count(), services, wards);
+        });
+
+    private sealed record SummaryRow(int ServiceId, int Ward, Guid OfficerUserId, IReadOnlyDictionary<string, object>? Details);
+
+    /// One service's figures, worked out from its own field definitions rather than written out per service:
+    /// every number field is summed, and every choice field is split by option, each option carrying the same
+    /// number sums over the visits that chose it. A field added to a visit form later is summarised without
+    /// a change here.
+    private static VisitServiceSummaryDto Summarise(int serviceId, IReadOnlyCollection<SummaryRow> rows)
+    {
+        var fields = MonitoringFieldDefinitions.For(serviceId);
+        var choices = fields.Where(x => x.Type == "select" && x.Options is not null).Select(field =>
+            new VisitChoiceSummaryDto(field.Key, field.Options!.Select(option =>
+            {
+                var chosen = rows.Where(row => row.Details is not null &&
+                    row.Details.TryGetValue(field.Key, out var value) && value is string text && text == option).ToArray();
+                return new VisitOptionSummaryDto(option, chosen.Length, Numbers(fields, chosen));
+            }).ToArray())).ToArray();
+        return new VisitServiceSummaryDto(serviceId, rows.Count, rows.Select(x => x.Ward).Distinct().Count(),
+            Numbers(fields, rows), choices);
+    }
+
+    private static IReadOnlyList<VisitNumberSummaryDto> Numbers(IReadOnlyList<VisitFieldDefinition> fields, IReadOnlyCollection<SummaryRow> rows) =>
+        fields.Where(x => x.Type == "number").Select(field =>
+        {
+            var values = rows.Select(row => Number(row, field.Key)).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+            return new VisitNumberSummaryDto(field.Key, values.Sum(), values.Length);
+        }).ToArray();
+
+    /// A stored number, or null when the visit did not give one. Details are read defensively, so a value of
+    /// an unexpected type is simply not a number.
+    private static double? Number(SummaryRow row, string key) =>
+        row.Details is not null && row.Details.TryGetValue(key, out var value)
+            ? value switch { long whole => whole, double fraction => fraction, _ => (double?)null }
+            : null;
+
     public Task<MonitoringResult<FieldVisitDto>> VoidAsync(ClaimsPrincipal principal, Guid visitId, string reason, CancellationToken ct = default) =>
         Run(async () =>
         {
