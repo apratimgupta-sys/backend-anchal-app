@@ -62,21 +62,80 @@ public sealed class DailyEntryCollectsTests
             MonitoringRules.DailyEntryServiceCount);
     }
 
-    /// The point of deriving it: no source file carries a second copy of the eight ids as a list.
-    /// Pins the one list that exists (MonitoringRules' own shape set) and fails if another appears.
-    [Fact]
-    public void NoOtherSourceFileSpellsOutTheFieldWorkIds()
-    {
-        var root = SourceRoot();
-        var offenders = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                     && !f.EndsWith("MonitoringRules.cs"))
-            .Where(f => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(f), @"8\s*,\s*9\s*,\s*10\s*,\s*13\s*,\s*14"))
-            .Select(Path.GetFileName).ToArray();
+    private static readonly int[] FieldWorkIds = [8, 9, 10, 13, 14, 15, 16, 17];
 
-        Assert.Empty(offenders);
+    /// The two statements that may spell the field-work ids out, each named by file and by what it declares:
+    /// the shape set the daily entry's rule is derived from, and the table of what a visit asks each of them.
+    private static readonly (string File, string Anchor)[] Carriers =
+    [
+        ("MonitoringRules.cs", "FieldWorkServices ="),
+        ("MonitoringFieldDefinitions.cs", "ByService ="),
+    ];
+
+    /// A statement that names this many of the eight ids as bare integers is spelling out the field-work set,
+    /// in whatever order, with whatever separators ("[8, 9, ...]", "is 8 or 9 or ...", "case 8: case 9:"), or
+    /// is half of it. Four, not eight: no statement in src has more than two of them by accident today.
+    private const int SpellingThreshold = 4;
+
+    /// The statements of the source (comments removed) that name SpellingThreshold or more of the eight ids.
+    internal static string[] FieldWorkIdSpellings(string source)
+    {
+        var code = System.Text.RegularExpressions.Regex.Replace(source, @"//[^\n]*|/\*.*?\*/", " ",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        return code.Split(';').Where(statement =>
+                System.Text.RegularExpressions.Regex.Matches(statement, @"(?<![\w.])\d+(?![\w.])")
+                    .Select(m => int.Parse(m.Value)).Where(FieldWorkIds.Contains).Distinct().Count() >= SpellingThreshold)
+            .Select(statement => statement.Trim()).ToArray();
     }
+
+    private static string[] Offenders(string root) =>
+        Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => FieldWorkIdSpellings(File.ReadAllText(f))
+                .Where(statement => !Carriers.Any(c => Path.GetFileName(f) == c.File && statement.Contains(c.Anchor)))
+                .Select(statement => $"{Path.GetFileName(f)}: {statement[..Math.Min(80, statement.Length)]}"))
+            .ToArray();
+
+    /// The point of deriving it: no source file carries a second copy of the eight ids. Every file is scanned,
+    /// MonitoringRules.cs included, minus the two named carrier statements.
+    [Fact]
+    public void NoOtherSourceStatementSpellsOutTheFieldWorkIds() => Assert.Empty(Offenders(SourceRoot()));
+
+    /// The allowance is not a hole: each carrier still exists and still holds the whole set, so the exemption
+    /// cannot outlive the statement it names, and the shape set is the one the rule is derived from.
+    [Fact]
+    public void TheTwoCarriersExistAndTheShapeSetIsExactlyTheEightIds()
+    {
+        var rules = FieldWorkIdSpellings(File.ReadAllText(Path.Combine(SourceRoot(),
+            "Anchal.Domain", "CommissionerMonitoring", "Rules", "MonitoringRules.cs")));
+        var definitions = FieldWorkIdSpellings(File.ReadAllText(Path.Combine(SourceRoot(),
+            "Anchal.Domain", "CommissionerMonitoring", "Rules", "MonitoringFieldDefinitions.cs")));
+
+        var shapeSet = Assert.Single(rules);
+        Assert.Contains("FieldWorkServices =", shapeSet);
+        Assert.Contains("[8, 9, 10, 13, 14, 15, 16, 17]", shapeSet);
+        Assert.Contains("ByService =", Assert.Single(definitions));
+    }
+
+    [Theory]
+    [InlineData("var a = new[] { 8, 9, 10, 13, 14, 15, 16, 17 };")]
+    [InlineData("var a = new[] { 17, 9, 14, 8, 16, 10, 15, 13 };")]
+    [InlineData("var a = id is 8 or 9 or 10 or 13 or 14 or 15 or 16 or 17;")]
+    [InlineData("var a = new HashSet<int> { 8,9,10,13,14,15,16,17 };")]
+    [InlineData("switch (id) { case 17: case 16: case 15: case 14: case 13: case 10: case 9: case 8: return true; }")]
+    [InlineData("var a = new[] { 8, 9, 10, 13 }; var b = new[] { 14, 15, 16, 17 };")]
+    [InlineData("var a = ids.Where(x => x is 8 or 9 or 10 or 13)")]
+    public void TheScanSeesTheIdsInAnyOrderAndWithAnySeparator(string source) =>
+        Assert.NotEmpty(FieldWorkIdSpellings(source));
+
+    [Theory]
+    [InlineData("var a = new[] { 8, 9, 10 };")]
+    [InlineData("// the field-work services are 8, 9, 10, 13, 14, 15, 16, 17\nvar a = 1;")]
+    [InlineData("var a = new[] { 1, 3, 4, 7, 11, 12, 18, 19 };")]
+    [InlineData("var a = 18.9 + 1_000_000_000 + 8 + 9 + x10;")]
+    public void TheScanIgnoresCommentsOtherNumbersAndAFewIncidentalIds(string source) =>
+        Assert.Empty(FieldWorkIdSpellings(source));
 
     internal static string SourceRoot()
     {
