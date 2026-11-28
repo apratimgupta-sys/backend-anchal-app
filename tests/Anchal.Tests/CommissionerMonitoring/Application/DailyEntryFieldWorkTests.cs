@@ -139,13 +139,14 @@ public sealed class DailyEntryFieldWorkTests
     }
 
     /// The denominator must come from the rule. A literal here, 25 or 17 alike, is what drifted before.
+    /// The only literals allowed are the pinned branch's 1 and 0, and that branch must ask the rule.
     [Fact]
-    public void TheDenominatorExpressionCarriesNoNumericLiteralBesideThePinnedOne()
+    public void TheDenominatorExpressionCarriesNoNumericLiteralBesideThePinnedBranch()
     {
         var path = Path.Combine(Domain.DailyEntryCollectsTests.SourceRoot(), "Anchal.Application",
             "CommissionerMonitoring", "Services", "MonitoringService.cs");
-        var line = Assert.Single(File.ReadAllLines(path), l => l.Contains("filter.ServiceId.HasValue ? 1 :"));
-        var unpinned = line[(line.IndexOf("? 1 :", StringComparison.Ordinal) + "? 1 :".Length)..];
+        var line = Assert.Single(File.ReadAllLines(path), l => l.Contains("filter.ServiceId.HasValue ? (DailyEntryCollects("));
+        var unpinned = line[(line.LastIndexOf(" : ", StringComparison.Ordinal) + " : ".Length)..];
 
         Assert.DoesNotMatch(@"\d", unpinned);
         Assert.Contains("DailyEntryServiceCount", unpinned);
@@ -167,9 +168,10 @@ public sealed class DailyEntryFieldWorkTests
         Assert.Equal(1, row.Submitted);
     }
 
-    /// Pinned to one field-work service, the filed count is that service's own history, not zero of N.
+    /// Pinned to one field-work service, the filed count is that service's own history, not zero of N, and
+    /// nothing is due: the daily entry refuses it, so expecting a report would read "Not filed" forever.
     [Fact]
-    public async Task PinnedToAFieldWorkServiceTheHistoricEntryStillCountsAsFiled()
+    public async Task PinnedToAFieldWorkServiceTheHistoricEntryStillCountsAndNothingIsDue()
     {
         await using var f = await Fixture.Create();
         f.SeedPreCutover(Input(9, Day1, completed: 7));
@@ -178,6 +180,32 @@ public sealed class DailyEntryFieldWorkTests
         var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day3, null, 9))).Value!.Data.Rows.Single();
 
         Assert.Equal(1, row.Submitted);
+        Assert.Equal(0, row.Expected);
+    }
+
+    [Fact]
+    public async Task PinnedToAFieldWorkServiceWithNoHistoryNothingIsDueEither()
+    {
+        await using var f = await Fixture.Create();
+
+        var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day3, null, 9))).Value!.Data.Rows.Single();
+
+        Assert.Equal(0, row.Submitted);
+        Assert.Equal(0, row.Expected);
+    }
+
+    /// Pinned to a collected service, one report is due a day and the filed count is that service's entries.
+    [Fact]
+    public async Task PinnedToACollectedServiceOneIsDuePerDayAndItsEntriesAreCounted()
+    {
+        await using var f = await Fixture.Create();
+        Assert.True((await f.Save(Input(11, Day1, received: 5, completed: 2))).IsSuccess);
+        Assert.True((await f.Save(Input(11, Day3, received: 4, completed: 1))).IsSuccess);
+        Assert.True((await f.Save(Input(12, Day1, received: 4, completed: 1))).IsSuccess);
+
+        var row = (await f.Service.GetDashboardAsync(f.Commissioner, new PeriodFilter(Day1, Day3, null, 11))).Value!.Data.Rows.Single();
+
+        Assert.Equal(2, row.Submitted);
         Assert.Equal(3, row.Expected);
     }
 

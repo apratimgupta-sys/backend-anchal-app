@@ -258,7 +258,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             double? disposalPct = received == 0 ? null : (double)completed / received * 100;
             double? slaPct = completed == 0 ? null : (double)sla / completed * 100;
             var start = filter.From > setup.StartDate ? filter.From : setup.StartDate;
-            var expected = Math.Max(0L, (long)filter.To.DayNumber - start.DayNumber + 1) * (filter.ServiceId.HasValue ? 1 : DailyEntryServiceCount);
+            var expected = Math.Max(0L, (long)filter.To.DayNumber - start.DayNumber + 1) * (filter.ServiceId.HasValue ? (DailyEntryCollects(filter.ServiceId.Value) ? 1 : 0) : DailyEntryServiceCount);
             var reasons = new List<string>();
             if (pending > 10) reasons.Add("Pending > 10");
             if (disposalPct < 90) reasons.Add("Disposal < 90%");
