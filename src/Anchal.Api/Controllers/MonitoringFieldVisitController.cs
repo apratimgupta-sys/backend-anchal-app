@@ -54,7 +54,7 @@ public sealed class MonitoringFieldVisitController(
         return new FieldVisitFilter(from, to,
             Bounded(query, "officeId", 1, 6),
             Bounded(query, "ward", 1, MonitoringRules.WardCount),
-            Bounded(query, "serviceId", 1, 25),
+            Bounded(query, "serviceId", 1, MonitoringRules.ServiceCount),
             query.ContainsKey("officerId") && Guid.TryParse(query["officerId"], out var officer) ? officer : null,
             Bounded(query, "page", 1, 10_000) ?? 1);
     }
