@@ -23,13 +23,17 @@ public sealed class FieldWorkEntryRulesTests
     public static TheoryData<int> CounterShape =>
         new(1, 3, 4, 7, 11, 12, 18, 19, 20, 21, 22, 23, 24, 25);
 
+    /// Work done with no request behind it is how field work is recorded, and it is recorded by field
+    /// officers as visits now. The daily entry refuses it: see DailyEntryCollectsTests.
     [Theory]
     [MemberData(nameof(FieldWork))]
-    public void WorkDoneWithNoRequestBehindItIsAccepted(int serviceId)
+    public void WorkDoneIsNoLongerAcceptedOnTheDailyEntry(int serviceId)
     {
         var entry = Entry(serviceId) with { Completed = 5, Received = 0 };
 
-        MonitoringRules.ValidateEntry(entry, Today);
+        var error = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(entry, Today));
+
+        Assert.Equal(new[] { "serviceId" }, error.Error.FieldErrors!.Keys);
     }
 
     /// Was asserted for all 17 non-field-work services; the three revenue

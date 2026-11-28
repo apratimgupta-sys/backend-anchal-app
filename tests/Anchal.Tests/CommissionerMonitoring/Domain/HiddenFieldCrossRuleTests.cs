@@ -22,7 +22,8 @@ public sealed class HiddenFieldCrossRuleTests
     private static EntryInput PreCutover(int serviceId) =>
         new(serviceId, Today, "Ward 24", 7, 5, 4, 1234, 2, 1, 3, 3, 2.5, "filed before the cutover");
 
-    public static TheoryData<int> EveryService => new([.. Enumerable.Range(1, 25)]);
+    // The services the daily entry still collects; field work is refused before any hidden-field rule is reached.
+    public static TheoryData<int> EveryService => new([.. Enumerable.Range(1, 25).Where(MonitoringRules.DailyEntryCollects)]);
 
     [Fact]
     public void CollectedFieldsAreTheOnesTheShapeAsksFor()
@@ -44,16 +45,19 @@ public sealed class HiddenFieldCrossRuleTests
         MonitoringRules.ValidateEntry(corrected, Today);
     }
 
-    /// Field work shape, same scenario through Work done.
+    /// Field work left the daily entry, so a correction to a pre-cutover field-work entry is refused. It is
+    /// refused on the service alone: the hidden stored figures must not add a second, unhighlightable error.
     [Theory]
     [InlineData(8)]
     [InlineData(10)]
     [InlineData(15)]
-    public void LoweringWorkDoneBelowAStoredWithinSlaFigureIsAccepted(int serviceId)
+    public void ACorrectionToAFieldWorkEntryIsRefusedOnTheServiceAndNothingElse(int serviceId)
     {
         var corrected = PreCutover(serviceId) with { Completed = 2 };
 
-        MonitoringRules.ValidateEntry(corrected, Today);
+        var error = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(corrected, Today));
+
+        Assert.Equal(new[] { "serviceId" }, error.Error.FieldErrors!.Keys);
     }
 
     /// Revenue shape: the form has no disposal figure, so lowering Payments
@@ -110,7 +114,7 @@ public sealed class HiddenFieldCrossRuleTests
     [Fact]
     public void AnOutOfRangeHiddenFigureIsStillRefused()
     {
-        var entry = PreCutover(15) with { ComplaintsReceived = -1 };
+        var entry = PreCutover(11) with { ComplaintsReceived = -1 };
 
         var error = Assert.Throws<MonitoringRuleException>(
             () => MonitoringRules.ValidateEntry(entry, Today));

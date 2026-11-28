@@ -86,7 +86,8 @@ public sealed class NothingToReportTests
     // Break caught: "the office said nothing happened" persisted next to a figure the office was
     // asked for, leaving downstream consumers to guess which side is true. Each row names the
     // service it applies to, because which figures count depends on the service's shape:
-    // 1 and 12 counter (12 is grievance by kind but counter by shape), 2 revenue, 8 field work.
+    // 1 and 12 counter (12 is grievance by kind but counter by shape), 2 revenue. Field work (8..17) is no longer collected by the daily entry at all: it is refused outright,
+    // which DailyEntryCollectsTests pins.
     [Theory]
     [InlineData(1, "received")]
     [InlineData(1, "completed")]
@@ -94,7 +95,6 @@ public sealed class NothingToReportTests
     [InlineData(12, "completed")]
     [InlineData(2, "received")]
     [InlineData(2, "amountPaise")]
-    [InlineData(8, "completed")]
     public void NothingToReportWithACollectedFigureIsRejectedOnTheFlagField(int serviceId, string figure)
     {
         var ex = Assert.Throws<MonitoringRuleException>(() => MonitoringRules.ValidateEntry(Figure(serviceId, figure), Today));
@@ -116,9 +116,6 @@ public sealed class NothingToReportTests
     [InlineData(12, "slaWithinTime")]
     [InlineData(2, "completed")]
     [InlineData(2, "slaWithinTime")]
-    [InlineData(8, "received")]
-    [InlineData(8, "slaWithinTime")]
-    [InlineData(8, "amountPaise")]
     public void NothingToReportWithARetiredFigureIsAccepted(int serviceId, string figure) =>
         MonitoringRules.ValidateEntry(Figure(serviceId, figure), Today);
 

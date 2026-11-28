@@ -454,7 +454,7 @@ public sealed class MonitoringServiceTests
         Assert.Equal(50, row.DisposalPct);
         Assert.Equal(100, row.SlaPct);
         Assert.Equal(101, row.AmountPaise);
-        Assert.Equal(75, row.Expected);
+        Assert.Equal(3 * 17, row.Expected);
         Assert.Equal(1, row.Submitted);
         Assert.Equal(f.Clock.GetUtcNow(), dashboard.LastUpdated);
         var unconfigured = Assert.Single(dashboard.Data.Rows, x => x.OfficeId == f.OtherOffice);

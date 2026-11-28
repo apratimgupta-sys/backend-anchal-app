@@ -71,9 +71,9 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
                 if (command.StartDate == default || command.StartDate > Today(now))
                     Fail(422, "Enter a valid reporting start date through today");
                 if (command.ExpectedVersion is not null) Fail(409, "Initial balances changed. Reload before correcting.", "CONFLICT");
-                if (command.Balances is null || command.Balances.Count != 25 ||
-                    command.Balances.Select(x => x.ServiceId).Distinct().Count() != 25 ||
-                    command.Balances.Any(x => x.ServiceId is < 1 or > 25 || x.Opening is null ||
+                if (command.Balances is null || command.Balances.Count != ServiceCount ||
+                    command.Balances.Select(x => x.ServiceId).Distinct().Count() != ServiceCount ||
+                    command.Balances.Any(x => x.ServiceId is < 1 or > ServiceCount || x.Opening is null ||
                         new[] { x.Opening.Service, x.Opening.Complaints, x.Opening.Field }.Any(v => v is < 0 or > 1_000_000_000)))
                     Fail(422, "Confirm nonnegative opening balances for all 25 services");
                 if (await db.Reports.AnyAsync(x => x.OfficeId == office, ct))
@@ -258,12 +258,12 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
             double? disposalPct = received == 0 ? null : (double)completed / received * 100;
             double? slaPct = completed == 0 ? null : (double)sla / completed * 100;
             var start = filter.From > setup.StartDate ? filter.From : setup.StartDate;
-            var expected = Math.Max(0L, (long)filter.To.DayNumber - start.DayNumber + 1) * (filter.ServiceId.HasValue ? 1 : 25);
+            var expected = Math.Max(0L, (long)filter.To.DayNumber - start.DayNumber + 1) * (filter.ServiceId.HasValue ? 1 : DailyEntryServiceCount);
             var reasons = new List<string>();
             if (pending > 10) reasons.Add("Pending > 10");
             if (disposalPct < 90) reasons.Add("Disposal < 90%");
             rows.Add(new(office.Id, office.Code, received, completed, sla, pending, disposalPct, slaPct,
-                period.Sum(x => x.Input.AmountPaise), complaints, field, period.Count, expected, true, reasons, workDone));
+                period.Sum(x => x.Input.AmountPaise), complaints, field, period.Count(x => filter.ServiceId.HasValue || DailyEntryCollects(x.Input.ServiceId)), expected, true, reasons, workDone));
         }
         return Read(new DashboardDto(rows), LastUpdated(audits));
     });
@@ -345,7 +345,7 @@ public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock)
     private async Task ValidateFilter(PeriodFilter filter, CancellationToken ct)
     {
         if (filter.From == default || filter.To == default || filter.From > filter.To || filter.To > Today(clock.GetUtcNow()) ||
-            filter.ServiceId is < 1 or > 25 || (filter.OfficeId.HasValue &&
+            filter.ServiceId is < 1 or > ServiceCount || (filter.OfficeId.HasValue &&
             !await db.Offices.AnyAsync(x => x.Id == filter.OfficeId && x.IsActive, ct)))
             Fail(422, "Invalid reporting filters");
     }
