@@ -385,6 +385,8 @@ public sealed class RoleManagerUserAdministrationTests
     [InlineData("/history")]
     [InlineData("/dashboard")]
     [InlineData("/dashboard/entries")]
+    [InlineData("/dashboard/services")]
+    [InlineData("/dashboard/days")]
     [InlineData("/office/setup")]
     [InlineData("/office/entries?mode=day")]
     [InlineData("/field-visits?from=2026-11-01&to=2026-11-23")]

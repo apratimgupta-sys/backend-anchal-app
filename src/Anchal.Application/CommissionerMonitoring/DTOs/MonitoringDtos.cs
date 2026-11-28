@@ -67,3 +67,11 @@ public sealed record FieldVisitDto(Guid Id, DateOnly VisitDate, string VisitTime
 public sealed record FieldVisitPageDto(IReadOnlyList<FieldVisitDto> Rows, int Total);
 public sealed record FieldVisitFilter(DateOnly From, DateOnly To, int? OfficeId, int? Ward, int? ServiceId,
     Guid? OfficerId, int Page);
+
+// The dashboard's finer breakdowns. Each is rolled up here so that the page never adds anything up itself.
+// A service row carries the raw sums for that service; which of them mean anything for its form shape is
+// the page's question, answered with the same shape rules the daily entry uses.
+public sealed record ServiceRowDto(int ServiceId, long Received, long Completed, long Pending, double? DisposalPct, long AmountPaise);
+public sealed record DashboardServicesDto(IReadOnlyList<ServiceRowDto> Rows);
+public sealed record DayRowDto(DateOnly Date, long Received, long Completed, long AmountPaise);
+public sealed record DashboardDaysDto(IReadOnlyList<DayRowDto> Rows);

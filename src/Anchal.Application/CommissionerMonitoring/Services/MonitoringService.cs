@@ -17,7 +17,7 @@ namespace Anchal.Application.CommissionerMonitoring.Services;
 /// Audit snapshots retain the Cloudflare metadata and mutation receipts absent from the count schema.
 /// All writers must use MutateOfficeAsync so validation and projection updates are serialized.
 /// </summary>
-public sealed class MonitoringService(IMonitoringContext db, TimeProvider clock) : IMonitoringService
+public sealed partial class MonitoringService(IMonitoringContext db, TimeProvider clock) : IMonitoringService
 {
     /// Session roles that may read the service master. An allow-list: a role added to the system
     /// is refused here until it is named.

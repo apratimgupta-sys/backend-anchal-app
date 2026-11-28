@@ -10,5 +10,7 @@ namespace Anchal.Api.Controllers;
 public sealed class MonitoringDashboardController(IMonitoringService service, MonitoringHttpAdapter adapter) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Dashboard(CancellationToken ct) => await adapter.Read(Response, await service.GetDashboardAsync(User, await adapter.Filter(Request.Query, ct), ct), ct);
+    [HttpGet("services")] public async Task<IActionResult> Services(CancellationToken ct) => await adapter.Read(Response, await service.GetDashboardServicesAsync(User, await adapter.Filter(Request.Query, ct), ct), ct);
+    [HttpGet("days")] public async Task<IActionResult> Days(CancellationToken ct) => await adapter.Read(Response, await service.GetDashboardDaysAsync(User, await adapter.Filter(Request.Query, ct), ct), ct);
     [HttpGet("entries")] public async Task<IActionResult> Entries(CancellationToken ct) => await adapter.Read(Response, await service.GetDashboardEntriesAsync(User, await adapter.Filter(Request.Query, ct), ct), ct);
 }

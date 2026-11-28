@@ -13,5 +13,7 @@ public interface IMonitoringService
     Task<MonitoringResult<EntryDto>> SaveEntryAsync(ClaimsPrincipal principal, SaveEntryCommand command, Guid? id = null, CancellationToken ct = default);
     Task<MonitoringResult<MonitoringRead<DashboardDto>>> GetDashboardAsync(ClaimsPrincipal principal, PeriodFilter filter, CancellationToken ct = default);
     Task<MonitoringResult<MonitoringRead<IReadOnlyList<EntryDto>>>> GetDashboardEntriesAsync(ClaimsPrincipal principal, PeriodFilter filter, CancellationToken ct = default);
+    Task<MonitoringResult<MonitoringRead<DashboardServicesDto>>> GetDashboardServicesAsync(ClaimsPrincipal principal, PeriodFilter filter, CancellationToken ct = default);
+    Task<MonitoringResult<MonitoringRead<DashboardDaysDto>>> GetDashboardDaysAsync(ClaimsPrincipal principal, PeriodFilter filter, CancellationToken ct = default);
     Task<MonitoringResult<MonitoringRead<IReadOnlyList<AuditDto>>>> GetHistoryAsync(ClaimsPrincipal principal, CancellationToken ct = default);
 }
