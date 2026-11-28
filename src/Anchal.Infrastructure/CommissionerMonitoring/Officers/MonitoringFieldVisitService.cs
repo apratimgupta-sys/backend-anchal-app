@@ -171,6 +171,10 @@ public sealed class MonitoringFieldVisitService(
         if (input.OfficeId is < 1 or > 6) throw Validation("officeId", "Select an Anchal");
         if (input.Ward is < 1 or > MonitoringRules.WardCount) throw Validation("ward", "Select a ward from 1 to 53");
         if (input.ServiceId is < 1 or > MonitoringRules.ServiceCount) throw Validation("serviceId", "Select an activity");
+        // A visit is how field work is reported, and only field work: everything else is the clerk's daily
+        // entry. Visits already stored for other services are untouched; this refuses new ones.
+        if (!MonitoringRules.IsFieldWork(input.ServiceId))
+            throw Validation("serviceId", "Only field-work activities are recorded as visits");
         var issueAction = (input.IssueAction ?? string.Empty).Trim();
         if (issueAction.Length < IssueActionMinimumLength)
             throw Validation("issueAction",

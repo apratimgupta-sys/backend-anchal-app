@@ -124,27 +124,46 @@ public sealed class FieldVisitDetailsTests
         Assert.False(errors.TryGetProperty("input.details.street", out _));
     }
 
-    [Fact]
-    public async Task AServiceWithNoFieldsRefusesANonEmptyDetailsObject()
+    /// A visit is how field work is reported, and only field work.
+    [Theory]
+    [InlineData(1)] [InlineData(2)] [InlineData(11)] [InlineData(24)]
+    public async Task ANewVisitForAServiceThatIsNotFieldWorkIsRefused(int serviceId)
     {
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await Post(host, Input(1, new Dictionary<string, object> { ["street"] = "Main lane" }));
+        using var response = await Post(host, Input(serviceId, withDetails: false));
 
         var errors = await Rejected(response);
-        Assert.True(errors.TryGetProperty("input.details.street", out _));
+        Assert.Equal("Only field-work activities are recorded as visits", errors.GetProperty("input.serviceId").GetString());
+        var list = await host.Client.GetFromJsonAsync<JsonElement>(Root + $"/field-visits?from={Today()}&to={Today()}");
+        Assert.Equal(0, list.GetProperty("total").GetInt32());
     }
 
-    [Fact]
-    public async Task AServiceWithNoFieldsAcceptsAnEmptyDetailsObject()
+    [Theory]
+    [InlineData(8)] [InlineData(9)] [InlineData(10)] [InlineData(13)]
+    [InlineData(14)] [InlineData(15)] [InlineData(16)] [InlineData(17)]
+    public async Task ANewVisitForEachFieldWorkServiceIsStillAccepted(int serviceId)
     {
         await using var host = await Create();
         await host.SignInAsOfficer();
 
-        using var response = await Post(host, Input(1, new Dictionary<string, object>()));
+        using var response = await Post(host, Input(serviceId, withDetails: false));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    /// Refusing new ones must not hide old ones: one such visit exists on staging.
+    [Fact]
+    public async Task AVisitAlreadyFiledForAnotherServiceIsStillListed()
+    {
+        await using var host = await Create();
+        var officer = await host.SignInAsOfficer();
+        await PlantRow(host, officer.GetProperty("id").GetGuid(), null, serviceId: 1);
+
+        var list = await host.Client.GetFromJsonAsync<JsonElement>(Root + $"/field-visits?from={Today()}&to={Today()}");
+
+        Assert.Equal(1, list.GetProperty("total").GetInt32());
     }
 
     [Theory]
@@ -449,7 +468,7 @@ public sealed class FieldVisitDetailsTests
         return await host.Client.PostAsync(Root + "/field-visits", new StringContent(body, Encoding.UTF8, "application/json"));
     }
 
-    private static async Task PlantRow(MonitoringTestHost host, Guid officerId, string? detailsJson)
+    private static async Task PlantRow(MonitoringTestHost host, Guid officerId, string? detailsJson, int serviceId = 8)
     {
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<CommissionerMonitoringDbContext>();
@@ -458,7 +477,7 @@ public sealed class FieldVisitDetailsTests
         db.FieldVisits.Add(new MonitoringFieldVisit
         {
             Id = Guid.NewGuid(), RequestId = "plant-" + Guid.NewGuid().ToString("N"), Fingerprint = "plant",
-            OfficeId = office.Id, OfficerUserId = officerId, Ward = 24, ServiceId = 8,
+            OfficeId = office.Id, OfficerUserId = officerId, Ward = 24, ServiceId = serviceId,
             VisitDate = MonitoringRules.Today(now), VisitTime = new(0, 1), Latitude = 23.3, Longitude = 85.3,
             AccuracyMetres = 18, GpsCapturedAt = now, ReceivedAt = now, IssueAction = Observation, DetailsJson = detailsJson
         });
